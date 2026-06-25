@@ -13,36 +13,33 @@ function extractIps(candidate) {
   return found;
 }
 
-export function getLocalIp(timeoutMs = 5000) {
+export function getLocalIps(timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
     if (!window.RTCPeerConnection) {
       reject(new Error("WebRTC (RTCPeerConnection) недоступен в этом браузере"));
       return;
     }
 
-    let settled = false;
+    const ips = new Set();
     const pc = new RTCPeerConnection({ iceServers: [] });
 
-    const finish = (ip = null) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
+    const finish = () => {
       pc.onicecandidate = null;
       pc.close();
-      resolve(ip);
+      resolve([...ips]);
     };
 
-    const timer = setTimeout(() => finish(null), timeoutMs);
+    const timer = setTimeout(finish, timeoutMs);
 
     pc.onicecandidate = (event) => {
       if (!event.candidate) {
-        finish(null);
+        clearTimeout(timer);
+        finish();
         return;
       }
 
       for (const ip of extractIps(event.candidate.candidate)) {
-        finish(ip);
-        return;
+        ips.add(ip);
       }
     };
 
