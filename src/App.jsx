@@ -5,9 +5,15 @@ const STATUS = {
   idle: "idle",
   loading: "loading",
   success: "success",
+  mdns: "mdns",
   empty: "empty",
   error: "error",
 };
+
+function isDesktopChrome() {
+  const ua = navigator.userAgent;
+  return /Chrome|Chromium|Edg/i.test(ua) && !/Mobile|Android/i.test(ua);
+}
 
 export default function App() {
   const [status, setStatus] = useState(STATUS.loading);
@@ -20,9 +26,16 @@ export default function App() {
     setIps([]);
 
     try {
-      const found = await getLocalIps();
-      setIps(found);
-      setStatus(found.length > 0 ? STATUS.success : STATUS.empty);
+      const { addresses, hasOnlyMdns } = await getLocalIps();
+      setIps(addresses);
+
+      if (addresses.length === 0) {
+        setStatus(STATUS.empty);
+      } else if (hasOnlyMdns) {
+        setStatus(STATUS.mdns);
+      } else {
+        setStatus(STATUS.success);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Неизвестная ошибка");
       setStatus(STATUS.error);
@@ -58,11 +71,43 @@ export default function App() {
         </section>
       )}
 
+      {status === STATUS.mdns && (
+        <section className="result">
+          <h2>Найдены только mDNS-имена</h2>
+          <ul>
+            {ips.map((ip) => (
+              <li key={ip}>
+                <code>{ip}</code>
+              </li>
+            ))}
+          </ul>
+          <p className="status status--empty status--inline">
+            На этом устройстве браузер скрывает реальный IPv4 и отдаёт
+            заглушку вида <code>*.local</code>. Это типично для Chrome и Edge
+            на компьютере. На телефоне политика приватности часто мягче, поэтому
+            там может показываться настоящий адрес.
+          </p>
+        </section>
+      )}
+
       {status === STATUS.empty && (
-        <p className="status status--empty">
-          Адреса не найдены. Современные браузеры часто скрывают локальный IP
-          из соображений приватности.
-        </p>
+        <div className="status status--empty">
+          <p>Адреса не найдены.</p>
+          {isDesktopChrome() ? (
+            <p>
+              Chrome/Edge на ПК по умолчанию скрывают локальный IP через WebRTC.
+              Попробуйте открыть сайт в Firefox или на телефоне. В Chrome можно
+              отключить флаг{" "}
+              <code>Anonymize local IPs exposed by WebRTC</code> на странице{" "}
+              <code>chrome://flags</code>.
+            </p>
+          ) : (
+            <p>
+              Современные браузеры часто скрывают локальный IP из соображений
+              приватности.
+            </p>
+          )}
+        </div>
       )}
 
       {status === STATUS.error && (
@@ -74,8 +119,8 @@ export default function App() {
       </button>
 
       <p className="note">
-        Результат зависит от браузера: Chrome, Firefox и Edge могут не
-        показывать реальный LAN-адрес или подставлять заглушку.
+        Результат зависит от браузера и устройства, а не от Wi‑Fi сети. Один и
+        тот же сайт на телефоне и на ПК может вести себя по-разному.
       </p>
     </main>
   );

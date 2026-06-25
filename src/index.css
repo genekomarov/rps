@@ -53,6 +53,11 @@ h2 {
   color: #fdd663;
 }
 
+.status--inline {
+  margin: 1rem 0 0;
+  padding: 0.875rem 1rem;
+}
+
 .status--error {
   background: #2d1f1f;
   color: #f28b82;
