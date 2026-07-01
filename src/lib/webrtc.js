@@ -10,6 +10,7 @@ const RTC_CONFIG = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:global.stun.twilio.com:3478" },
+    { urls: "stun:stun.relay.metered.ca:443" },
     {
       urls: [
         "turn:openrelay.metered.ca:80",
@@ -31,12 +32,12 @@ const RTC_CONFIG = {
     },
   ],
   iceTransportPolicy: "all",
-  iceCandidatePoolSize: 8,
+  iceCandidatePoolSize: 10,
 };
 
 const DATA_CHANNEL_LABEL = "chat";
 const ICE_GATHER_TIMEOUT_MS = 8000;
-const ICE_GATHER_FALLBACK_MAX_MS = 20000;
+const ICE_GATHER_FALLBACK_MAX_MS = 25000;
 const ICE_RESTART_DELAY_MS = 2500;
 const ICE_RESTART_MAX_ATTEMPTS = 2;
 const DATA_CHANNEL_LOG_INTERVAL_MS = 30000;
@@ -46,16 +47,32 @@ function logIceCandidateSummary(pc, log, prefix, level = "info") {
   log(level, `${prefix}: ${formatIceCandidateCounts(counts)}`);
   if (counts.total === 0) {
     log("warn", "ICE: в SDP нет кандидатов — соединение между разными сетями, скорее всего, не установится");
-  } else if (counts.srflx === 0 && counts.relay === 0) {
+  } else if (counts.relay === 0) {
     log(
       "warn",
-      "ICE: только локальные host-кандидаты — для телефон+ПК обычно нужны srflx или relay",
+      "ICE: relay-кандидатов нет — между телефоном и ПК соединение часто не устанавливается без TURN",
     );
+  } else if (counts.srflx === 0) {
+    log("warn", "ICE: только host и relay — srflx не получен, но relay есть");
   }
 }
 
-async function waitForIceGatheringComplete(pc, log) {
-  if (pc.iceGatheringState === "complete") {
+function shouldWaitForRelay(pc, elapsedMs) {
+  const counts = countIceCandidatesInSdp(pc.localDescription?.sdp);
+  if (counts.relay > 0) return false;
+  return elapsedMs < ICE_GATHER_FALLBACK_MAX_MS;
+}
+
+async function waitForIceGatheringComplete(pc, log, options = {}) {
+  const force = options.force ?? false;
+  const countsNow = countIceCandidatesInSdp(pc.localDescription?.sdp);
+
+  if (
+    !force &&
+    pc.iceGatheringState === "complete" &&
+    countsNow.total > 0 &&
+    countsNow.relay > 0
+  ) {
     logIceCandidateSummary(pc, log, "ICE: сбор завершён");
     return;
   }
@@ -65,12 +82,15 @@ async function waitForIceGatheringComplete(pc, log) {
   await new Promise((resolve, reject) => {
     let done = false;
     const startedAt = Date.now();
-    let extended = false;
+    let relayExtended = false;
+    let sawEndOfCandidates = false;
 
     function cleanup() {
       clearTimeout(primaryTimer);
-      clearInterval(extensionTimer);
-      pc.removeEventListener("icegatheringstatechange", onChange);
+      clearTimeout(maxTimer);
+      clearInterval(pollTimer);
+      pc.removeEventListener("icecandidate", onIceCandidate);
+      pc.removeEventListener("icegatheringstatechange", onGatheringChange);
       pc.removeEventListener("connectionstatechange", onClosed);
     }
 
@@ -89,49 +109,59 @@ async function waitForIceGatheringComplete(pc, log) {
       reject(error);
     }
 
-    function maybeFinishAfterTimeout() {
-      if (pc.iceGatheringState === "complete") {
-        finish("ICE: сбор завершён");
-        return;
-      }
-
-      const counts = countIceCandidatesInSdp(pc.localDescription?.sdp);
-      const hasWan = counts.srflx > 0 || counts.relay > 0;
+    function tryFinish(message, level = "warn") {
       const elapsed = Date.now() - startedAt;
+      const counts = countIceCandidatesInSdp(pc.localDescription?.sdp);
 
-      if (!hasWan && elapsed < ICE_GATHER_FALLBACK_MAX_MS && pc.iceGatheringState !== "complete") {
-        if (!extended) {
-          extended = true;
+      if (shouldWaitForRelay(pc, elapsed)) {
+        if (!relayExtended) {
+          relayExtended = true;
           log(
             "info",
-            `ICE: srflx/relay ещё нет — продлеваем сбор до ${ICE_GATHER_FALLBACK_MAX_MS / 1000} с (разные сети)`,
+            `ICE: relay ещё нет — продлеваем сбор до ${ICE_GATHER_FALLBACK_MAX_MS / 1000} с (нужен для разных сетей)`,
           );
         }
         return;
       }
 
-      finish(
-        `ICE: таймаут ${Math.min(elapsed, ICE_GATHER_FALLBACK_MAX_MS)} мс — используем уже собранные кандидаты`,
-        "warn",
-      );
-    }
-
-    const primaryTimer = setTimeout(maybeFinishAfterTimeout, ICE_GATHER_TIMEOUT_MS);
-    const extensionTimer = setInterval(() => {
-      if (pc.iceGatheringState === "complete") {
-        finish("ICE: сбор завершён");
+      if (counts.total === 0 && !sawEndOfCandidates && elapsed < ICE_GATHER_FALLBACK_MAX_MS) {
         return;
       }
-      if (Date.now() - startedAt >= ICE_GATHER_FALLBACK_MAX_MS) {
-        maybeFinishAfterTimeout();
-      }
-    }, 2000);
 
-    function onChange() {
-      if (pc.iceGatheringState === "complete") {
-        finish("ICE: сбор завершён");
-      }
+      finish(message, level);
     }
+
+    function onIceCandidate(event) {
+      if (event.candidate) return;
+      sawEndOfCandidates = true;
+      tryFinish("ICE: сбор завершён", "info");
+    }
+
+    function onGatheringChange() {
+      if (pc.iceGatheringState !== "complete") return;
+      sawEndOfCandidates = true;
+      setTimeout(() => tryFinish("ICE: сбор завершён", "info"), 200);
+    }
+
+    const primaryTimer = setTimeout(() => {
+      tryFinish(
+        `ICE: таймаут ${ICE_GATHER_TIMEOUT_MS} мс — используем уже собранные кандидаты`,
+        "warn",
+      );
+    }, ICE_GATHER_TIMEOUT_MS);
+
+    const maxTimer = setTimeout(() => {
+      tryFinish(
+        `ICE: лимит ${ICE_GATHER_FALLBACK_MAX_MS} мс — используем уже собранные кандидаты`,
+        "warn",
+      );
+    }, ICE_GATHER_FALLBACK_MAX_MS);
+
+    const pollTimer = setInterval(() => {
+      if (pc.iceGatheringState === "complete") {
+        tryFinish("ICE: сбор завершён", "info");
+      }
+    }, 1000);
 
     function onClosed() {
       if (pc.connectionState === "closed") {
@@ -139,11 +169,12 @@ async function waitForIceGatheringComplete(pc, log) {
       }
     }
 
-    pc.addEventListener("icegatheringstatechange", onChange);
+    pc.addEventListener("icecandidate", onIceCandidate);
+    pc.addEventListener("icegatheringstatechange", onGatheringChange);
     pc.addEventListener("connectionstatechange", onClosed);
 
     if (pc.iceGatheringState === "complete") {
-      onChange();
+      onGatheringChange();
     }
   });
 }
@@ -270,12 +301,12 @@ export class WebRtcMesh {
       throw new Error("Некорректное приглашение хоста");
     }
 
-    this.log("info", `Гость: принятие приглашения от ${payload.hostName || hostId}`);
-
     const existing = this.peerMap.get(hostId);
     if (existing?.handshakeGuest) {
       return this.acceptHostOfferUpdate(payload, existing);
     }
+
+    this.log("info", `Гость: принятие приглашения от ${payload.hostName || hostId}`);
 
     const peer = this.ensurePeer(hostId, false, payload.hostName || "Host");
     peer.handshakeGuest = true;
@@ -316,11 +347,20 @@ export class WebRtcMesh {
 
     this.log("info", `Гость: обновление приглашения (ICE restart) от ${payload.hostName || hostId}`);
     peer.handshakeGuest = true;
+    peer.iceRestartAttempts = 0;
 
-    await peer.pc.setRemoteDescription(toSessionDescription(payload.signal));
+    try {
+      await peer.pc.setRemoteDescription(toSessionDescription(payload.signal));
+    } catch (error) {
+      this.log("warn", "Гость: сбой обновления SDP — пересоздаём соединение");
+      if (peer.iceRestartTimer) clearTimeout(peer.iceRestartTimer);
+      peer.pc.close();
+      this.peerMap.delete(hostId);
+      return this.acceptHostOffer(payload);
+    }
     const answer = await peer.pc.createAnswer();
     await peer.pc.setLocalDescription(answer);
-    await waitForIceGatheringComplete(peer.pc, this.log.bind(this));
+    await waitForIceGatheringComplete(peer.pc, this.log.bind(this), { force: true });
     this.publishDiagnostics();
 
     void this.waitForDataChannel(peer).then(() => {
@@ -352,6 +392,11 @@ export class WebRtcMesh {
     const existingPeer = this.peerMap.get(guestId);
     if (existingPeer) {
       this.log("info", `Хост: обновление ответа от ${payload.guestName || guestId} (ICE restart)`);
+      existingPeer.iceRestartAttempts = 0;
+      if (existingPeer.iceRestartTimer) {
+        clearTimeout(existingPeer.iceRestartTimer);
+        existingPeer.iceRestartTimer = null;
+      }
       await existingPeer.pc.setRemoteDescription(toSessionDescription(payload.signal));
       this.publishDiagnostics();
       this.startDataChannelWait(existingPeer);
@@ -370,6 +415,7 @@ export class WebRtcMesh {
     this.peerMap.delete(invitePeer.peerId);
     invitePeer.peerId = guestId;
     invitePeer.peerName = payload.guestName || guestId;
+    invitePeer.iceRestartAttempts = 0;
     this.peerMap.set(guestId, invitePeer);
     this.pendingInvitePeerId = null;
 
@@ -559,9 +605,16 @@ export class WebRtcMesh {
       peer.pc.restartIce();
       const offer = await peer.pc.createOffer({ iceRestart: true });
       await peer.pc.setLocalDescription(offer);
-      await waitForIceGatheringComplete(peer.pc, this.log.bind(this));
-      this.publishDiagnostics();
+      await waitForIceGatheringComplete(peer.pc, this.log.bind(this), { force: true });
 
+      let counts = countIceCandidatesInSdp(peer.pc.localDescription?.sdp);
+      if (counts.total === 0) {
+        this.log("warn", "Хост: ICE restart дал пустой SDP — пересоздаём peer");
+        await this.recreateHostPeerOffer(peer);
+        return;
+      }
+
+      this.publishDiagnostics();
       this.onHandshakeOfferRefresh?.({
         hostId: this.selfId,
         hostName: this.selfName,
@@ -574,6 +627,34 @@ export class WebRtcMesh {
         `Хост: ICE restart не удался (${error instanceof Error ? error.message : "ошибка"})`,
       );
     }
+  }
+
+  async recreateHostPeerOffer(oldPeer) {
+    const { peerId, peerName } = oldPeer;
+    if (oldPeer.iceRestartTimer) {
+      clearTimeout(oldPeer.iceRestartTimer);
+      oldPeer.iceRestartTimer = null;
+    }
+
+    oldPeer.pc.close();
+    this.peerMap.delete(peerId);
+    if (this.pendingInvitePeerId === peerId) {
+      this.pendingInvitePeerId = null;
+    }
+
+    const peer = this.ensurePeer(peerId, true, peerName);
+    const offer = await peer.pc.createOffer();
+    await peer.pc.setLocalDescription(offer);
+    await waitForIceGatheringComplete(peer.pc, this.log.bind(this), { force: true });
+    this.publishDiagnostics();
+
+    this.onHandshakeOfferRefresh?.({
+      hostId: this.selfId,
+      hostName: this.selfName,
+      signal: packSignalDescription(peer.pc.localDescription),
+    });
+    this.log("info", "Хост: peer пересоздан — передайте новое приглашение гостю");
+    this.startDataChannelWait(peer);
   }
 
   attachPeerWatchers(peer) {

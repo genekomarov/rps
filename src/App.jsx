@@ -36,6 +36,7 @@ export default function App() {
   const [diagnostics, setDiagnostics] = useState([]);
 
   const meshRef = useRef(null);
+  const resettingRef = useRef(false);
   const messagesRef = useRef(messages);
   const messageIdsRef = useRef(new Set(messages.map((item) => item.id)));
 
@@ -209,7 +210,11 @@ export default function App() {
   }
 
   function resetSession() {
+    if (resettingRef.current || busy) return;
+    resettingRef.current = true;
+
     meshRef.current?.dispose();
+    meshRef.current = null;
     const preserved = resetSessionState();
     setClientId(crypto.randomUUID());
     setNickname(preserved.nickname);
@@ -222,6 +227,10 @@ export default function App() {
     setDiagnostics([]);
     messageIdsRef.current = new Set();
     appendLog("info", "Сессия сброшена");
+
+    window.setTimeout(() => {
+      resettingRef.current = false;
+    }, 800);
   }
 
   const showHostActions = !isChatReady && !answerCode;
