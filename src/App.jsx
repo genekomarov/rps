@@ -65,6 +65,19 @@ export default function App() {
   }, [isChatReady]);
 
   useEffect(() => {
+    if (!answerCode || isChatReady) return undefined;
+
+    const timer = window.setTimeout(() => {
+      setError((current) =>
+        current ||
+        "Соединение ещё устанавливается. Убедитесь, что хост вставил ответный код. На телефоне не сворачивайте вкладку.",
+      );
+    }, 25000);
+
+    return () => window.clearTimeout(timer);
+  }, [answerCode, isChatReady]);
+
+  useEffect(() => {
     if (!nickname.trim()) return undefined;
 
     const mesh = new WebRtcMesh({

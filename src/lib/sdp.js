@@ -1,4 +1,4 @@
-const ICE_LIMITS = { host: 5, srflx: 5, relay: 2 };
+const HANDSHAKE_ICE_LIMITS = { host: 4, srflx: 10, relay: 12 };
 const SKIP_LINE_PREFIXES = ["a=extmap:", "a=msid:", "a=ssrc:", "a=rtcp-fb:"];
 
 function splitSdpLines(sdp) {
@@ -32,7 +32,7 @@ export function trimSdp(sdp) {
     }
 
     const typ = line.match(/ typ ([a-z]+)/)?.[1] || "host";
-    const limit = ICE_LIMITS[typ] ?? 0;
+    const limit = HANDSHAKE_ICE_LIMITS[typ] ?? HANDSHAKE_ICE_LIMITS.host;
     if (iceCounts[typ] >= limit) {
       return false;
     }

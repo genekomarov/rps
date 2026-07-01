@@ -10,13 +10,25 @@ const RTC_CONFIG = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:global.stun.twilio.com:3478" },
+    {
+      urls: [
+        "turn:openrelay.metered.ca:80",
+        "turn:openrelay.metered.ca:443",
+        "turn:openrelay.metered.ca:443?transport=tcp",
+      ],
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
   ],
+  iceTransportPolicy: "all",
+  iceCandidatePoolSize: 4,
 };
 
 const DATA_CHANNEL_LABEL = "chat";
-const DATA_CHANNEL_TIMEOUT_MS = 20000;
+const DATA_CHANNEL_TIMEOUT_MS = 30000;
+const ICE_GATHER_TIMEOUT_MS = 15000;
 
-async function waitForIceGatheringComplete(pc, timeoutMs = 6000) {
+async function waitForIceGatheringComplete(pc, timeoutMs = ICE_GATHER_TIMEOUT_MS) {
   if (pc.iceGatheringState === "complete") return;
 
   await new Promise((resolve) => {
@@ -138,6 +150,7 @@ export class WebRtcMesh {
     const answer = await peer.pc.createAnswer();
     await peer.pc.setLocalDescription(answer);
     await waitForIceGatheringComplete(peer.pc);
+    this.watchPeerConnection(peer);
 
     return {
       targetHostId: hostId,
@@ -205,6 +218,7 @@ export class WebRtcMesh {
         done = true;
         clearTimeout(timer);
         peer.pc.removeEventListener("connectionstatechange", onConnectionChange);
+        peer.pc.removeEventListener("iceconnectionstatechange", onConnectionChange);
         peer.pc.removeEventListener("datachannel", onDataChannel);
         if (peer.dc) {
           peer.dc.removeEventListener("open", onChannelOpen);
@@ -219,6 +233,13 @@ export class WebRtcMesh {
       };
 
       const onConnectionChange = () => {
+        if (peer.pc.iceConnectionState === "connected" || peer.pc.iceConnectionState === "completed") {
+          this.syncPeerReady(peer);
+          if (this.isPeerReady(peer)) {
+            finish();
+            return;
+          }
+        }
         if (peer.pc.connectionState === "failed" || peer.pc.connectionState === "closed") {
           finish(new Error("Соединение WebRTC не установлено"));
           return;
@@ -249,7 +270,37 @@ export class WebRtcMesh {
       }
 
       peer.pc.addEventListener("connectionstatechange", onConnectionChange);
+      peer.pc.addEventListener("iceconnectionstatechange", onConnectionChange);
       onConnectionChange();
+    });
+  }
+
+  watchPeerConnection(peer) {
+    if (peer.connectionWatchersAttached) return;
+    peer.connectionWatchersAttached = true;
+
+    const sync = () => {
+      this.syncPeerReady(peer);
+      this.notifyPeers();
+    };
+
+    peer.pc.addEventListener("iceconnectionstatechange", () => {
+      const state = peer.pc.iceConnectionState;
+      if (state === "connected" || state === "completed") {
+        sync();
+        return;
+      }
+      if (state === "failed") {
+        this.onError("P2P-соединение не установлено. Попробуйте сгенерировать приглашение заново.");
+        this.peerMap.delete(peer.peerId);
+        this.notifyPeers();
+      }
+    });
+
+    peer.pc.addEventListener("icegatheringstatechange", () => {
+      if (peer.pc.iceGatheringState === "complete") {
+        sync();
+      }
     });
   }
 
@@ -264,10 +315,11 @@ export class WebRtcMesh {
       pc,
       dc: null,
       isOpen: false,
+      connectionWatchersAttached: false,
     };
 
     if (initiator) {
-      const dc = pc.createDataChannel(DATA_CHANNEL_LABEL, { negotiated: false });
+      const dc = pc.createDataChannel(DATA_CHANNEL_LABEL, { ordered: true });
       this.attachDataChannel(peer, dc);
     } else {
       pc.addEventListener("datachannel", (event) => {
@@ -275,6 +327,8 @@ export class WebRtcMesh {
         this.attachDataChannel(peer, event.channel);
       });
     }
+
+    this.watchPeerConnection(peer);
 
     pc.addEventListener("connectionstatechange", () => {
       if (pc.connectionState === "failed" || pc.connectionState === "closed") {
@@ -326,6 +380,7 @@ export class WebRtcMesh {
     });
 
     dc.addEventListener("message", (event) => {
+      this.syncPeerReady(peer);
       this.handleIncomingEnvelope(peer.peerId, safeParse(event.data));
     });
 
