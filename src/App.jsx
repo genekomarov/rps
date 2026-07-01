@@ -291,7 +291,12 @@ export default function App() {
               value={answerCode || hostOfferCode}
             />
           ) : null}
-          <QrScanner onScan={handleScannedValue} onLog={appendLog} disabled={busy} />
+          <QrScanner
+            key={clientId}
+            onScan={handleScannedValue}
+            onLog={appendLog}
+            disabled={busy}
+          />
         </div>
       ) : null}
 
