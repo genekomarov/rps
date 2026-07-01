@@ -25,48 +25,48 @@ const RTC_CONFIG = {
 };
 
 const DATA_CHANNEL_LABEL = "chat";
-const ICE_GATHER_LOG_INTERVAL_MS = 8000;
+const ICE_GATHER_TIMEOUT_MS = 8000;
 const DATA_CHANNEL_LOG_INTERVAL_MS = 30000;
 
-async function waitForIceGatheringComplete(pc, log, isAborted) {
+async function waitForIceGatheringComplete(pc, log) {
   if (pc.iceGatheringState === "complete") {
     log("info", "ICE: сбор кандидатов завершён");
     return;
   }
 
-  log("info", "ICE: сбор сетевых кандидатов (без ограничения по времени)...");
+  log("info", `ICE: сбор сетевых кандидатов (до ${ICE_GATHER_TIMEOUT_MS / 1000} с)...`);
 
   await new Promise((resolve, reject) => {
-    let attempt = 0;
+    let done = false;
 
-    const logTimer = setInterval(() => {
-      if (isAborted?.()) {
-        cleanup();
-        reject(new Error("Сессия сброшена"));
-        return;
-      }
-      attempt += 1;
+    const timeoutTimer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      cleanup();
       log(
-        "info",
-        `ICE: сбор кандидатов, попытка ${attempt}, состояние: ${pc.iceGatheringState}`,
+        "warn",
+        `ICE: таймаут ${ICE_GATHER_TIMEOUT_MS} мс — используем уже собранные кандидаты (состояние: ${pc.iceGatheringState})`,
       );
-    }, ICE_GATHER_LOG_INTERVAL_MS);
+      resolve();
+    }, ICE_GATHER_TIMEOUT_MS);
 
     function cleanup() {
-      clearInterval(logTimer);
+      clearTimeout(timeoutTimer);
       pc.removeEventListener("icegatheringstatechange", onChange);
       pc.removeEventListener("connectionstatechange", onClosed);
     }
 
     function onChange() {
-      if (pc.iceGatheringState !== "complete") return;
+      if (pc.iceGatheringState !== "complete" || done) return;
+      done = true;
       cleanup();
       log("info", "ICE: сбор кандидатов завершён");
       resolve();
     }
 
     function onClosed() {
-      if (pc.connectionState !== "closed") return;
+      if (pc.connectionState !== "closed" || done) return;
+      done = true;
       cleanup();
       reject(new Error("Сессия сброшена"));
     }
@@ -185,7 +185,7 @@ export class WebRtcMesh {
     const offer = await peer.pc.createOffer();
     await peer.pc.setLocalDescription(offer);
     this.log("info", "Хост: local offer установлен");
-    await waitForIceGatheringComplete(peer.pc, this.log.bind(this), () => this.closed);
+    await waitForIceGatheringComplete(peer.pc, this.log.bind(this));
     this.publishDiagnostics();
 
     return {
@@ -210,7 +210,7 @@ export class WebRtcMesh {
     const answer = await peer.pc.createAnswer();
     await peer.pc.setLocalDescription(answer);
     this.log("info", "Гость: local answer установлен");
-    await waitForIceGatheringComplete(peer.pc, this.log.bind(this), () => this.closed);
+    await waitForIceGatheringComplete(peer.pc, this.log.bind(this));
     this.publishDiagnostics();
 
     return {
@@ -256,7 +256,7 @@ export class WebRtcMesh {
     const peer = this.ensurePeer(peerId, true, peerName || peerId);
     const offer = await peer.pc.createOffer();
     await peer.pc.setLocalDescription(offer);
-    await waitForIceGatheringComplete(peer.pc, this.log.bind(this), () => this.closed);
+    await waitForIceGatheringComplete(peer.pc, this.log.bind(this));
 
     this.broadcastEnvelope(
       createEnvelope(ProtocolTypes.forwardSignal, {
@@ -587,7 +587,7 @@ export class WebRtcMesh {
       if (isOffer) {
         const answer = await peer.pc.createAnswer();
         await peer.pc.setLocalDescription(answer);
-        await waitForIceGatheringComplete(peer.pc, this.log.bind(this), () => this.closed);
+        await waitForIceGatheringComplete(peer.pc, this.log.bind(this));
 
         this.broadcastEnvelope(
           createEnvelope(ProtocolTypes.forwardSignal, {
