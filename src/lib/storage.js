@@ -8,6 +8,7 @@ const defaultState = {
   nicknameDraft: "",
   messages: [],
   peers: [],
+  extendedRelayGather: false,
 };
 
 function hasWindow() {
@@ -33,6 +34,7 @@ export function loadState() {
       ...parsed,
       messages: Array.isArray(parsed.messages) ? parsed.messages : [],
       peers: Array.isArray(parsed.peers) ? parsed.peers : [],
+      extendedRelayGather: Boolean(parsed.extendedRelayGather),
     };
   } catch {
     return { ...defaultState };

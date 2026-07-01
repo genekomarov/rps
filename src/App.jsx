@@ -34,6 +34,9 @@ export default function App() {
   const [busyLabel, setBusyLabel] = useState("");
   const [logEntries, setLogEntries] = useState([]);
   const [diagnostics, setDiagnostics] = useState([]);
+  const [extendedRelayGather, setExtendedRelayGather] = useState(
+    Boolean(stored.extendedRelayGather),
+  );
 
   const meshRef = useRef(null);
   const resettingRef = useRef(false);
@@ -81,6 +84,10 @@ export default function App() {
   }, [messages]);
 
   useEffect(() => {
+    saveState({ extendedRelayGather });
+  }, [extendedRelayGather]);
+
+  useEffect(() => {
     if (!isChatReady) return;
     setHostOfferCode("");
     setAnswerCode("");
@@ -94,6 +101,7 @@ export default function App() {
     const mesh = new WebRtcMesh({
       selfId: clientId,
       selfName: nickname,
+      extendedRelayGather,
       onPeerListChange: setPeers,
       onMessage: (nextMessage) => {
         if (messageIdsRef.current.has(nextMessage.id)) return;
@@ -128,7 +136,7 @@ export default function App() {
       mesh.dispose();
       meshRef.current = null;
     };
-  }, [clientId, nickname, appendLog]);
+  }, [clientId, nickname, appendLog, extendedRelayGather]);
 
   function saveNickname() {
     const normalized = nicknameDraft.trim();
@@ -263,6 +271,17 @@ export default function App() {
             Сбросить сессию
           </button>
         </div>
+        <label className="checkbox-field">
+          <input
+            type="checkbox"
+            checked={extendedRelayGather}
+            onChange={(event) => setExtendedRelayGather(event.target.checked)}
+            disabled={busy}
+          />
+          <span>
+            Расширенный поиск relay (до 25 с) — для подключения между разными сетями (телефон + ПК)
+          </span>
+        </label>
         {error ? <p className="error">{error}</p> : null}
       </section>
 
@@ -271,12 +290,6 @@ export default function App() {
         title={phaseMeta.title}
         hint={phaseMeta.hint}
         busyLabel={busyLabel}
-      />
-
-      <ConnectionLog
-        entries={logEntries}
-        diagnostics={diagnostics}
-        onClear={() => setLogEntries([])}
       />
 
       {!isChatReady ? (
@@ -349,6 +362,12 @@ export default function App() {
           </section>
         </>
       ) : null}
+
+      <ConnectionLog
+        entries={logEntries}
+        diagnostics={diagnostics}
+        onClear={() => setLogEntries([])}
+      />
     </main>
   );
 }

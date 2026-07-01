@@ -67,6 +67,20 @@ p {
   color: #6b7280;
 }
 
+.checkbox-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.checkbox-field input {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
 .actions {
   display: flex;
   gap: 0.5rem;

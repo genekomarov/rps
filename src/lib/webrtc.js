@@ -37,10 +37,28 @@ const RTC_CONFIG = {
 
 const DATA_CHANNEL_LABEL = "chat";
 const ICE_GATHER_TIMEOUT_MS = 8000;
-const ICE_GATHER_FALLBACK_MAX_MS = 25000;
+const ICE_GATHER_EXTENDED_MAX_MS = 25000;
 const ICE_RESTART_DELAY_MS = 2500;
 const ICE_RESTART_MAX_ATTEMPTS = 2;
 const DATA_CHANNEL_LOG_INTERVAL_MS = 30000;
+
+const DEFAULT_ICE_GATHER_CONFIG = {
+  primaryTimeoutMs: ICE_GATHER_TIMEOUT_MS,
+  fallbackMaxMs: ICE_GATHER_TIMEOUT_MS,
+  waitForRelay: false,
+};
+
+function buildIceGatherConfig(extendedRelayGather) {
+  if (!extendedRelayGather) {
+    return { ...DEFAULT_ICE_GATHER_CONFIG };
+  }
+
+  return {
+    primaryTimeoutMs: ICE_GATHER_TIMEOUT_MS,
+    fallbackMaxMs: ICE_GATHER_EXTENDED_MAX_MS,
+    waitForRelay: true,
+  };
+}
 
 function logIceCandidateSummary(pc, log, prefix, level = "info") {
   const counts = countIceCandidatesInSdp(pc.localDescription?.sdp);
@@ -57,13 +75,15 @@ function logIceCandidateSummary(pc, log, prefix, level = "info") {
   }
 }
 
-function shouldWaitForRelay(pc, elapsedMs) {
+function shouldWaitForRelay(pc, elapsedMs, gatherConfig) {
+  if (!gatherConfig.waitForRelay) return false;
   const counts = countIceCandidatesInSdp(pc.localDescription?.sdp);
   if (counts.relay > 0) return false;
-  return elapsedMs < ICE_GATHER_FALLBACK_MAX_MS;
+  return elapsedMs < gatherConfig.fallbackMaxMs;
 }
 
 async function waitForIceGatheringComplete(pc, log, options = {}) {
+  const gatherConfig = options.gatherConfig ?? DEFAULT_ICE_GATHER_CONFIG;
   const force = options.force ?? false;
   const countsNow = countIceCandidatesInSdp(pc.localDescription?.sdp);
 
@@ -71,13 +91,16 @@ async function waitForIceGatheringComplete(pc, log, options = {}) {
     !force &&
     pc.iceGatheringState === "complete" &&
     countsNow.total > 0 &&
-    countsNow.relay > 0
+    (countsNow.relay > 0 || !gatherConfig.waitForRelay)
   ) {
     logIceCandidateSummary(pc, log, "ICE: сбор завершён");
     return;
   }
 
-  log("info", `ICE: сбор сетевых кандидатов (до ${ICE_GATHER_TIMEOUT_MS / 1000} с)...`);
+  const gatherHint = gatherConfig.waitForRelay
+    ? `до ${gatherConfig.primaryTimeoutMs / 1000} с, до ${gatherConfig.fallbackMaxMs / 1000} с для relay`
+    : `до ${gatherConfig.primaryTimeoutMs / 1000} с`;
+  log("info", `ICE: сбор сетевых кандидатов (${gatherHint})...`);
 
   await new Promise((resolve, reject) => {
     let done = false;
@@ -113,18 +136,22 @@ async function waitForIceGatheringComplete(pc, log, options = {}) {
       const elapsed = Date.now() - startedAt;
       const counts = countIceCandidatesInSdp(pc.localDescription?.sdp);
 
-      if (shouldWaitForRelay(pc, elapsed)) {
+      if (shouldWaitForRelay(pc, elapsed, gatherConfig)) {
         if (!relayExtended) {
           relayExtended = true;
           log(
             "info",
-            `ICE: relay ещё нет — продлеваем сбор до ${ICE_GATHER_FALLBACK_MAX_MS / 1000} с (нужен для разных сетей)`,
+            `ICE: relay ещё нет — продлеваем сбор до ${gatherConfig.fallbackMaxMs / 1000} с (нужен для разных сетей)`,
           );
         }
         return;
       }
 
-      if (counts.total === 0 && !sawEndOfCandidates && elapsed < ICE_GATHER_FALLBACK_MAX_MS) {
+      if (
+        counts.total === 0 &&
+        !sawEndOfCandidates &&
+        elapsed < gatherConfig.fallbackMaxMs
+      ) {
         return;
       }
 
@@ -145,17 +172,17 @@ async function waitForIceGatheringComplete(pc, log, options = {}) {
 
     const primaryTimer = setTimeout(() => {
       tryFinish(
-        `ICE: таймаут ${ICE_GATHER_TIMEOUT_MS} мс — используем уже собранные кандидаты`,
+        `ICE: таймаут ${gatherConfig.primaryTimeoutMs} мс — используем уже собранные кандидаты`,
         "warn",
       );
-    }, ICE_GATHER_TIMEOUT_MS);
+    }, gatherConfig.primaryTimeoutMs);
 
     const maxTimer = setTimeout(() => {
       tryFinish(
-        `ICE: лимит ${ICE_GATHER_FALLBACK_MAX_MS} мс — используем уже собранные кандидаты`,
+        `ICE: лимит ${gatherConfig.fallbackMaxMs} мс — используем уже собранные кандидаты`,
         "warn",
       );
-    }, ICE_GATHER_FALLBACK_MAX_MS);
+    }, gatherConfig.fallbackMaxMs);
 
     const pollTimer = setInterval(() => {
       if (pc.iceGatheringState === "complete") {
@@ -199,6 +226,7 @@ export class WebRtcMesh {
     this.onDiagnostics = options.onDiagnostics;
     this.onHandshakeOfferRefresh = options.onHandshakeOfferRefresh;
     this.getHistory = options.getHistory;
+    this.iceGatherConfig = buildIceGatherConfig(options.extendedRelayGather);
 
     this.peerMap = new Map();
     this.seenEnvelopeIds = new Set();
@@ -208,6 +236,13 @@ export class WebRtcMesh {
 
   log(level, message) {
     this.onLog?.(level, message);
+  }
+
+  gatherIce(pc, options = {}) {
+    return waitForIceGatheringComplete(pc, this.log.bind(this), {
+      ...options,
+      gatherConfig: this.iceGatherConfig,
+    });
   }
 
   setSelfName(nextName) {
@@ -285,7 +320,7 @@ export class WebRtcMesh {
     const offer = await peer.pc.createOffer();
     await peer.pc.setLocalDescription(offer);
     this.log("info", "Хост: local offer установлен");
-    await waitForIceGatheringComplete(peer.pc, this.log.bind(this));
+    await this.gatherIce(peer.pc);
     this.publishDiagnostics();
 
     return {
@@ -316,7 +351,7 @@ export class WebRtcMesh {
     const answer = await peer.pc.createAnswer();
     await peer.pc.setLocalDescription(answer);
     this.log("info", "Гость: local answer установлен");
-    await waitForIceGatheringComplete(peer.pc, this.log.bind(this));
+    await this.gatherIce(peer.pc);
     this.publishDiagnostics();
 
     void this.waitForDataChannel(peer).then(() => {
@@ -360,7 +395,7 @@ export class WebRtcMesh {
     }
     const answer = await peer.pc.createAnswer();
     await peer.pc.setLocalDescription(answer);
-    await waitForIceGatheringComplete(peer.pc, this.log.bind(this), { force: true });
+    await this.gatherIce(peer.pc, { force: true });
     this.publishDiagnostics();
 
     void this.waitForDataChannel(peer).then(() => {
@@ -454,7 +489,7 @@ export class WebRtcMesh {
     const peer = this.ensurePeer(peerId, true, peerName || peerId);
     const offer = await peer.pc.createOffer();
     await peer.pc.setLocalDescription(offer);
-    await waitForIceGatheringComplete(peer.pc, this.log.bind(this));
+    await this.gatherIce(peer.pc);
 
     this.broadcastEnvelope(
       createEnvelope(ProtocolTypes.forwardSignal, {
@@ -605,7 +640,7 @@ export class WebRtcMesh {
       peer.pc.restartIce();
       const offer = await peer.pc.createOffer({ iceRestart: true });
       await peer.pc.setLocalDescription(offer);
-      await waitForIceGatheringComplete(peer.pc, this.log.bind(this), { force: true });
+      await this.gatherIce(peer.pc, { force: true });
 
       let counts = countIceCandidatesInSdp(peer.pc.localDescription?.sdp);
       if (counts.total === 0) {
@@ -645,7 +680,7 @@ export class WebRtcMesh {
     const peer = this.ensurePeer(peerId, true, peerName);
     const offer = await peer.pc.createOffer();
     await peer.pc.setLocalDescription(offer);
-    await waitForIceGatheringComplete(peer.pc, this.log.bind(this), { force: true });
+    await this.gatherIce(peer.pc, { force: true });
     this.publishDiagnostics();
 
     this.onHandshakeOfferRefresh?.({
@@ -887,7 +922,7 @@ export class WebRtcMesh {
       if (isOffer) {
         const answer = await peer.pc.createAnswer();
         await peer.pc.setLocalDescription(answer);
-        await waitForIceGatheringComplete(peer.pc, this.log.bind(this));
+        await this.gatherIce(peer.pc);
 
         this.broadcastEnvelope(
           createEnvelope(ProtocolTypes.forwardSignal, {
