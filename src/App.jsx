@@ -56,6 +56,14 @@ export default function App() {
     saveState({ peers });
   }, [peers]);
 
+  const isChatReady = peers.length > 0;
+
+  useEffect(() => {
+    if (!isChatReady) return;
+    setHostOfferCode("");
+    setAnswerCode("");
+  }, [isChatReady]);
+
   useEffect(() => {
     if (!nickname.trim()) return undefined;
 
@@ -117,14 +125,12 @@ export default function App() {
         const answerBody = await meshRef.current.acceptHostOffer(parsed.body);
         const payload = createSignalPayload("host-answer", answerBody);
         setAnswerCode(await encodeSignalPayload(payload));
+        setStatus("waitingHost");
         return;
       }
 
       if (parsed.type === "host-answer") {
         await meshRef.current.completeHostHandshake(parsed.body);
-        setHostOfferCode("");
-        setAnswerCode("");
-        setStatus("connected");
         return;
       }
 
@@ -167,13 +173,13 @@ export default function App() {
   }
 
   const connectedCount = peers.length;
-  const hasPendingHandshake = Boolean(hostOfferCode || answerCode);
-  const isChatReady = status === "connected" && !hasPendingHandshake;
   const statusLabel = isChatReady
     ? `connected(${connectedCount})`
     : answerCode
       ? "waitingHost"
-      : status;
+      : hostOfferCode
+        ? "waitingAnswer"
+        : status;
 
   return (
     <main className="layout">
@@ -214,7 +220,7 @@ export default function App() {
                 ? "Ваш QR-ответ (отдайте хосту)"
                 : "Ваш QR (отдайте другому пользователю)"
             }
-            value={hostOfferCode || answerCode}
+            value={answerCode || hostOfferCode}
           />
           <QrScanner onScan={handleScannedValue} />
         </div>

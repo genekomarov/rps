@@ -138,7 +138,6 @@ export class WebRtcMesh {
     const answer = await peer.pc.createAnswer();
     await peer.pc.setLocalDescription(answer);
     await waitForIceGatheringComplete(peer.pc);
-    await this.waitForDataChannel(peer);
 
     return {
       targetHostId: hostId,
