@@ -96,7 +96,13 @@ export default function App() {
   }
 
   const handleScannedValue = useCallback(async (value) => {
-    if (!value?.trim() || !meshRef.current) return;
+    if (!value?.trim()) return;
+
+    if (!meshRef.current) {
+      setError("Сначала сохраните ник");
+      return;
+    }
+
     try {
       setError("");
       const parsed = await decodeSignalPayload(value);
@@ -116,8 +122,9 @@ export default function App() {
       }
 
       setError("Неизвестный тип payload");
-    } catch {
-      setError("Некорректный payload");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Некорректный payload";
+      setError(message.startsWith("Некорректный") ? message : `Ошибка: ${message}`);
     }
   }, []);
 

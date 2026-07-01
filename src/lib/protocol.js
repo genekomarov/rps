@@ -133,13 +133,24 @@ function expandCompactPayload(compact) {
   throw new Error("Invalid signal payload type");
 }
 
+function normalizeSignalPayloadInput(rawValue) {
+  return String(rawValue ?? "")
+    .trim()
+    .replace(/^\uFEFF/, "")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/^["']+|["']+$/g, "")
+    .replace(/\s+/g, "");
+}
+
+async function decodeCompactPayloadBody(encodedBody) {
+  const bytes = base64UrlToBytes(encodedBody);
+  const json = await decompressToString(bytes);
+  return expandCompactPayload(JSON.parse(json));
+}
+
 function decodeLegacyPayload(rawValue) {
   const normalized = rawValue.trim();
-  const encoded = normalized.startsWith(SIGNAL_PREFIX_V1)
-    ? normalized.slice(SIGNAL_PREFIX_V1.length)
-    : normalized;
-
-  const parsed = JSON.parse(fromBase64Url(encoded));
+  const parsed = JSON.parse(fromBase64Url(normalized));
 
   if (parsed?.version !== 1) {
     throw new Error("Unsupported signal payload version");
@@ -167,22 +178,28 @@ export async function encodeSignalPayload(payload) {
 }
 
 export async function decodeSignalPayload(rawValue) {
-  const normalized = rawValue.trim();
-
-  if (normalized.startsWith(SIGNAL_PREFIX)) {
-    const bytes = base64UrlToBytes(normalized.slice(SIGNAL_PREFIX.length));
-    const json = await decompressToString(bytes);
-    return expandCompactPayload(JSON.parse(json));
+  const normalized = normalizeSignalPayloadInput(rawValue);
+  if (!normalized) {
+    throw new Error("Пустой payload");
   }
 
-  if (normalized.startsWith(SIGNAL_PREFIX_V1)) {
-    return decodeLegacyPayload(normalized);
+  const lower = normalized.toLowerCase();
+
+  if (lower.startsWith(SIGNAL_PREFIX)) {
+    return decodeCompactPayloadBody(normalized.slice(SIGNAL_PREFIX.length));
+  }
+
+  if (lower.startsWith(SIGNAL_PREFIX_V1)) {
+    const body = normalized.slice(SIGNAL_PREFIX_V1.length);
+    try {
+      return await decodeCompactPayloadBody(body);
+    } catch {
+      return decodeLegacyPayload(body);
+    }
   }
 
   try {
-    const bytes = base64UrlToBytes(normalized);
-    const json = await decompressToString(bytes);
-    return expandCompactPayload(JSON.parse(json));
+    return await decodeCompactPayloadBody(normalized);
   } catch {
     return decodeLegacyPayload(normalized);
   }
