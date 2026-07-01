@@ -108,13 +108,13 @@ export default function App() {
       },
       onLog: appendLog,
       onDiagnostics: setDiagnostics,
-      onHandshakeAnswerRefresh: async (answerBody) => {
-        const payload = createSignalPayload("host-answer", answerBody);
+      onHandshakeOfferRefresh: async (offerBody) => {
+        const payload = createSignalPayload("host-offer", offerBody);
         const encoded = await encodeSignalPayload(payload);
-        setAnswerCode(encoded);
+        setHostOfferCode(encoded);
         appendLog(
           "warn",
-          `Ответ обновлён (ICE restart, ${encoded.length} символов). Передайте новый код хосту.`,
+          `Приглашение обновлено (ICE restart, ${encoded.length} символов). Передайте новый код гостю.`,
         );
       },
       getHistory: () => messagesRef.current,
@@ -225,7 +225,6 @@ export default function App() {
   }
 
   const showHostActions = !isChatReady && !answerCode;
-  const showGuestScanner = !isChatReady && !hostOfferCode && !answerCode;
   const showQrOutput = Boolean(hostOfferCode || answerCode) && !isChatReady;
 
   return (
@@ -283,9 +282,7 @@ export default function App() {
               value={answerCode || hostOfferCode}
             />
           ) : null}
-          {showGuestScanner || hostOfferCode ? (
-            <QrScanner onScan={handleScannedValue} onLog={appendLog} disabled={busy} />
-          ) : null}
+          <QrScanner onScan={handleScannedValue} onLog={appendLog} disabled={busy} />
         </div>
       ) : null}
 
