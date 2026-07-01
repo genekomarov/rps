@@ -1,11 +1,24 @@
 const ICE_LIMITS = { host: 3, srflx: 3, relay: 0 };
 const SKIP_LINE_PREFIXES = ["a=extmap:", "a=msid:", "a=ssrc:", "a=rtcp-fb:"];
 
+function splitSdpLines(sdp) {
+  return sdp.split(/\r?\n/).map((line) => line.replace(/\r/g, ""));
+}
+
+export function normalizeSdp(sdp) {
+  if (!sdp) return sdp;
+
+  const lines = splitSdpLines(sdp).filter((line) => line.length > 0);
+  if (lines.length === 0) return sdp;
+
+  return `${lines.join("\r\n")}\r\n`;
+}
+
 export function trimSdp(sdp) {
   if (!sdp) return sdp;
 
   const iceCounts = { host: 0, srflx: 0, relay: 0 };
-  const lines = sdp.split(/\r?\n/);
+  const lines = splitSdpLines(sdp);
 
   const trimmed = lines.filter((line) => {
     if (!line) return false;
@@ -28,7 +41,7 @@ export function trimSdp(sdp) {
     return true;
   });
 
-  return trimmed.join("\r\n");
+  return normalizeSdp(trimmed.join("\r\n"));
 }
 
 export function packSignalDescription(description) {
@@ -38,4 +51,15 @@ export function packSignalDescription(description) {
     type: description.type,
     sdp: trimSdp(description.sdp),
   };
+}
+
+export function toSessionDescription(signal) {
+  if (!signal?.type || !signal?.sdp) {
+    throw new Error("Invalid signal description");
+  }
+
+  return new RTCSessionDescription({
+    type: signal.type,
+    sdp: normalizeSdp(signal.sdp),
+  });
 }

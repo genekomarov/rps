@@ -4,7 +4,7 @@ import {
   isValidChatMessage,
   trimChatHistory,
 } from "./protocol";
-import { packSignalDescription } from "./sdp";
+import { packSignalDescription, toSessionDescription } from "./sdp";
 
 const RTC_CONFIG = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -100,7 +100,7 @@ export class WebRtcMesh {
     }
 
     const peer = this.ensurePeer(hostId, false, payload.hostName || "Host");
-    await peer.pc.setRemoteDescription(new RTCSessionDescription(payload.signal));
+    await peer.pc.setRemoteDescription(toSessionDescription(payload.signal));
 
     const answer = await peer.pc.createAnswer();
     await peer.pc.setLocalDescription(answer);
@@ -135,7 +135,7 @@ export class WebRtcMesh {
       peer = this.ensurePeer(guestId, true, payload.guestName || guestId);
     }
 
-    await peer.pc.setRemoteDescription(new RTCSessionDescription(payload.signal));
+    await peer.pc.setRemoteDescription(toSessionDescription(payload.signal));
     this.notifyPeers();
   }
 
@@ -292,7 +292,7 @@ export class WebRtcMesh {
     const peer = this.ensurePeer(fromId, false, fromId);
 
     try {
-      await peer.pc.setRemoteDescription(new RTCSessionDescription(signal));
+      await peer.pc.setRemoteDescription(toSessionDescription(signal));
       if (isOffer) {
         const answer = await peer.pc.createAnswer();
         await peer.pc.setLocalDescription(answer);
