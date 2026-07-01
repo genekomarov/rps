@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import QrPanel from "./components/QrPanel";
 import QrScanner from "./components/QrScanner";
 import {
@@ -95,7 +95,7 @@ export default function App() {
     }
   }
 
-  async function handleScannedValue(value) {
+  const handleScannedValue = useCallback(async (value) => {
     if (!value?.trim() || !meshRef.current) return;
     try {
       setError("");
@@ -119,7 +119,7 @@ export default function App() {
     } catch {
       setError("Некорректный payload");
     }
-  }
+  }, []);
 
   function sendMessage() {
     const normalized = chatDraft.trim();
