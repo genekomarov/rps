@@ -5,6 +5,7 @@ const defaultState = {
   version: STORAGE_VERSION,
   clientId: "",
   nickname: "",
+  nicknameDraft: "",
   messages: [],
   peers: [],
 };
@@ -49,4 +50,23 @@ export function saveState(patch) {
 export function resetState() {
   if (!hasWindow()) return;
   window.localStorage.removeItem(KEY);
+}
+
+export function resetSessionState() {
+  if (!hasWindow()) return { nickname: "", nicknameDraft: "" };
+
+  const current = loadState();
+  const nickname = current.nickname || current.nicknameDraft || "";
+
+  window.localStorage.setItem(
+    KEY,
+    JSON.stringify({
+      ...defaultState,
+      nickname,
+      nicknameDraft: nickname,
+      version: STORAGE_VERSION,
+    }),
+  );
+
+  return { nickname, nicknameDraft: nickname };
 }

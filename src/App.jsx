@@ -8,7 +8,7 @@ import {
   encodeSignalPayload,
   trimChatHistory,
 } from "./lib/protocol";
-import { loadState, resetState, saveState } from "./lib/storage";
+import { loadState, resetSessionState, saveState } from "./lib/storage";
 import { WebRtcMesh } from "./lib/webrtc";
 
 const HISTORY_LIMIT = 100;
@@ -17,7 +17,9 @@ export default function App() {
   const stored = useMemo(() => loadState(), []);
   const [clientId, setClientId] = useState(stored.clientId || crypto.randomUUID());
   const [nickname, setNickname] = useState(stored.nickname || "");
-  const [nicknameDraft, setNicknameDraft] = useState(stored.nickname || "");
+  const [nicknameDraft, setNicknameDraft] = useState(
+    stored.nicknameDraft || stored.nickname || "",
+  );
   const [messages, setMessages] = useState(trimChatHistory(stored.messages || [], HISTORY_LIMIT));
   const [peers, setPeers] = useState([]);
   const [status, setStatus] = useState("offline");
@@ -41,6 +43,10 @@ export default function App() {
   useEffect(() => {
     saveState({ nickname });
   }, [nickname]);
+
+  useEffect(() => {
+    saveState({ nicknameDraft });
+  }, [nicknameDraft]);
 
   useEffect(() => {
     saveState({ messages: trimChatHistory(messages, HISTORY_LIMIT) });
@@ -118,6 +124,7 @@ export default function App() {
         await meshRef.current.completeHostHandshake(parsed.body);
         setHostOfferCode("");
         setAnswerCode("");
+        setStatus("connected");
         return;
       }
 
@@ -146,10 +153,10 @@ export default function App() {
 
   function resetSession() {
     meshRef.current?.dispose();
-    resetState();
+    const preserved = resetSessionState();
     setClientId(crypto.randomUUID());
-    setNickname("");
-    setNicknameDraft("");
+    setNickname(preserved.nickname);
+    setNicknameDraft(preserved.nicknameDraft);
     setMessages([]);
     setPeers([]);
     setHostOfferCode("");

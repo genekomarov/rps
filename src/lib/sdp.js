@@ -1,4 +1,4 @@
-const ICE_LIMITS = { host: 3, srflx: 3, relay: 0 };
+const ICE_LIMITS = { host: 5, srflx: 5, relay: 2 };
 const SKIP_LINE_PREFIXES = ["a=extmap:", "a=msid:", "a=ssrc:", "a=rtcp-fb:"];
 
 function splitSdpLines(sdp) {

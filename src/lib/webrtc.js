@@ -7,8 +7,14 @@ import {
 import { packSignalDescription, toSessionDescription } from "./sdp";
 
 const RTC_CONFIG = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:global.stun.twilio.com:3478" },
+  ],
 };
+
+const DATA_CHANNEL_LABEL = "chat";
+const DATA_CHANNEL_TIMEOUT_MS = 20000;
 
 async function waitForIceGatheringComplete(pc, timeoutMs = 6000) {
   if (pc.iceGatheringState === "complete") return;
@@ -54,6 +60,7 @@ export class WebRtcMesh {
 
     this.peerMap = new Map();
     this.seenEnvelopeIds = new Set();
+    this.pendingInvitePeerId = null;
     this.closed = false;
   }
 
@@ -61,9 +68,21 @@ export class WebRtcMesh {
     this.selfName = nextName;
   }
 
+  isPeerReady(peer) {
+    return Boolean(peer?.isOpen || peer?.dc?.readyState === "open");
+  }
+
+  syncPeerReady(peer) {
+    if (!peer) return false;
+    if (peer.dc?.readyState === "open" && !peer.isOpen) {
+      this.onDataChannelOpen(peer);
+    }
+    return this.isPeerReady(peer);
+  }
+
   listPeers() {
     return [...this.peerMap.values()]
-      .filter((peer) => peer.isOpen)
+      .filter((peer) => this.syncPeerReady(peer))
       .map((peer) => ({
         id: peer.peerId,
         name: peer.peerName || peer.peerId,
@@ -72,6 +91,7 @@ export class WebRtcMesh {
 
   dispose() {
     this.closed = true;
+    this.pendingInvitePeerId = null;
     for (const peer of this.peerMap.values()) {
       peer.pc.close();
     }
@@ -79,8 +99,21 @@ export class WebRtcMesh {
     this.notifyPeers();
   }
 
+  clearInvitePeers() {
+    for (const [peerId, peer] of [...this.peerMap.entries()]) {
+      if (!peerId.startsWith("invite-")) continue;
+      peer.pc.close();
+      this.peerMap.delete(peerId);
+    }
+    this.pendingInvitePeerId = null;
+  }
+
   async createHostOffer() {
+    this.clearInvitePeers();
+
     const tempPeerId = `invite-${crypto.randomUUID()}`;
+    this.pendingInvitePeerId = tempPeerId;
+
     const peer = this.ensurePeer(tempPeerId, true, "");
     const offer = await peer.pc.createOffer();
     await peer.pc.setLocalDescription(offer);
@@ -105,6 +138,7 @@ export class WebRtcMesh {
     const answer = await peer.pc.createAnswer();
     await peer.pc.setLocalDescription(answer);
     await waitForIceGatheringComplete(peer.pc);
+    await this.waitForDataChannel(peer);
 
     return {
       targetHostId: hostId,
@@ -120,22 +154,21 @@ export class WebRtcMesh {
       throw new Error("Invalid answer payload");
     }
 
-    const oldInvite = [...this.peerMap.values()].find(
-      (item) => item.peerId.startsWith("invite-") && !item.isOpen,
-    );
+    const invitePeerId = this.pendingInvitePeerId;
+    const invitePeer = invitePeerId ? this.peerMap.get(invitePeerId) : null;
 
-    let peer;
-    if (oldInvite) {
-      this.peerMap.delete(oldInvite.peerId);
-      oldInvite.peerId = guestId;
-      oldInvite.peerName = payload.guestName || guestId;
-      this.peerMap.set(guestId, oldInvite);
-      peer = oldInvite;
-    } else {
-      peer = this.ensurePeer(guestId, true, payload.guestName || guestId);
+    if (!invitePeer) {
+      throw new Error("Нет активного приглашения. Сгенерируйте приглашение заново.");
     }
 
-    await peer.pc.setRemoteDescription(toSessionDescription(payload.signal));
+    this.peerMap.delete(invitePeer.peerId);
+    invitePeer.peerId = guestId;
+    invitePeer.peerName = payload.guestName || guestId;
+    this.peerMap.set(guestId, invitePeer);
+    this.pendingInvitePeerId = null;
+
+    await invitePeer.pc.setRemoteDescription(toSessionDescription(payload.signal));
+    await this.waitForDataChannel(invitePeer);
     this.notifyPeers();
   }
 
@@ -160,6 +193,67 @@ export class WebRtcMesh {
     this.broadcastEnvelope(createEnvelope(ProtocolTypes.chatMessage, message), null);
   }
 
+  waitForDataChannel(peer, timeoutMs = DATA_CHANNEL_TIMEOUT_MS) {
+    if (this.syncPeerReady(peer)) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve, reject) => {
+      let done = false;
+
+      const finish = (error) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        peer.pc.removeEventListener("connectionstatechange", onConnectionChange);
+        peer.pc.removeEventListener("datachannel", onDataChannel);
+        if (peer.dc) {
+          peer.dc.removeEventListener("open", onChannelOpen);
+        }
+        if (error) reject(error);
+        else resolve();
+      };
+
+      const onChannelOpen = () => {
+        this.syncPeerReady(peer);
+        finish();
+      };
+
+      const onConnectionChange = () => {
+        if (peer.pc.connectionState === "failed" || peer.pc.connectionState === "closed") {
+          finish(new Error("Соединение WebRTC не установлено"));
+          return;
+        }
+        this.syncPeerReady(peer);
+        if (this.isPeerReady(peer)) {
+          finish();
+        }
+      };
+
+      const onDataChannel = (event) => {
+        this.attachDataChannel(peer, event.channel);
+        if (peer.dc?.readyState === "open") {
+          onChannelOpen();
+        } else {
+          peer.dc?.addEventListener("open", onChannelOpen, { once: true });
+        }
+      };
+
+      const timer = setTimeout(() => {
+        finish(new Error("Не удалось открыть канал данных. Проверьте сеть или вставьте payload заново."));
+      }, timeoutMs);
+
+      if (peer.dc) {
+        peer.dc.addEventListener("open", onChannelOpen, { once: true });
+      } else {
+        peer.pc.addEventListener("datachannel", onDataChannel);
+      }
+
+      peer.pc.addEventListener("connectionstatechange", onConnectionChange);
+      onConnectionChange();
+    });
+  }
+
   ensurePeer(peerId, initiator, peerName = "") {
     const existing = this.peerMap.get(peerId);
     if (existing) return existing;
@@ -174,17 +268,27 @@ export class WebRtcMesh {
     };
 
     if (initiator) {
-      const dc = pc.createDataChannel("chat");
+      const dc = pc.createDataChannel(DATA_CHANNEL_LABEL, { negotiated: false });
       this.attachDataChannel(peer, dc);
     } else {
       pc.addEventListener("datachannel", (event) => {
+        if (event.channel.label !== DATA_CHANNEL_LABEL) return;
         this.attachDataChannel(peer, event.channel);
       });
     }
 
     pc.addEventListener("connectionstatechange", () => {
       if (pc.connectionState === "failed" || pc.connectionState === "closed") {
-        this.peerMap.delete(peerId);
+        this.peerMap.delete(peer.peerId);
+        if (this.pendingInvitePeerId === peer.peerId) {
+          this.pendingInvitePeerId = null;
+        }
+        this.notifyPeers();
+        return;
+      }
+
+      if (pc.connectionState === "connected") {
+        this.syncPeerReady(peer);
         this.notifyPeers();
       }
     });
@@ -194,22 +298,28 @@ export class WebRtcMesh {
     return peer;
   }
 
+  onDataChannelOpen(peer) {
+    if (peer.isOpen) return;
+
+    peer.isOpen = true;
+    this.notifyPeers();
+    this.sendDirect(peer, createEnvelope(ProtocolTypes.hello, {
+      peerId: this.selfId,
+      peerName: this.selfName,
+      peers: this.listPeers(),
+    }));
+
+    this.sendDirect(peer, createEnvelope(ProtocolTypes.historySync, {
+      messages: trimChatHistory(this.getHistory(), 100),
+    }));
+  }
+
   attachDataChannel(peer, dc) {
+    if (peer.dc && peer.dc !== dc) {
+      peer.dc.close();
+    }
+
     peer.dc = dc;
-
-    dc.addEventListener("open", () => {
-      peer.isOpen = true;
-      this.notifyPeers();
-      this.sendDirect(peer, createEnvelope(ProtocolTypes.hello, {
-        peerId: this.selfId,
-        peerName: this.selfName,
-        peers: this.listPeers(),
-      }));
-
-      this.sendDirect(peer, createEnvelope(ProtocolTypes.historySync, {
-        messages: trimChatHistory(this.getHistory(), 100),
-      }));
-    });
 
     dc.addEventListener("close", () => {
       peer.isOpen = false;
@@ -219,9 +329,16 @@ export class WebRtcMesh {
     dc.addEventListener("message", (event) => {
       this.handleIncomingEnvelope(peer.peerId, safeParse(event.data));
     });
+
+    if (dc.readyState === "open") {
+      this.onDataChannelOpen(peer);
+    } else {
+      dc.addEventListener("open", () => this.onDataChannelOpen(peer), { once: true });
+    }
   }
 
   sendDirect(peer, envelope) {
+    this.syncPeerReady(peer);
     if (!peer?.dc || peer.dc.readyState !== "open") return;
     peer.dc.send(JSON.stringify(envelope));
   }
@@ -229,7 +346,7 @@ export class WebRtcMesh {
   broadcastEnvelope(envelope, exceptPeerId) {
     this.seenEnvelopeIds.add(envelope.id);
     for (const peer of this.peerMap.values()) {
-      if (!peer.isOpen) continue;
+      if (!this.syncPeerReady(peer)) continue;
       if (peer.peerId === exceptPeerId) continue;
       this.sendDirect(peer, envelope);
     }
