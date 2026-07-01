@@ -7,6 +7,28 @@ const SCANNER_STATE = {
   PAUSED: 3,
 };
 
+const SCANNER_CREATE_CONFIG = {
+  experimentalFeatures: {
+    useBarCodeDetectorIfSupported: true,
+  },
+};
+
+function isLikelyMobile() {
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+}
+
+function buildScanConfig(facingMode) {
+  return {
+    fps: 15,
+    disableFlip: false,
+    videoConstraints: {
+      facingMode: { ideal: facingMode },
+      width: { min: 640, ideal: 1280 },
+      height: { min: 480, ideal: 720 },
+    },
+  };
+}
+
 async function stopScanner(scanner) {
   if (!scanner) return;
 
@@ -26,17 +48,21 @@ async function stopScanner(scanner) {
   }
 }
 
-async function startWithFallback(scanner, config, onSuccess) {
-  const attempts = [
-    { facingMode: "environment" },
-    { facingMode: "user" },
-  ];
+async function startWithFallback(scanner, onSuccess) {
+  const facingModes = isLikelyMobile()
+    ? ["environment", "user"]
+    : ["user", "environment"];
 
   let lastError;
 
-  for (const cameraConfig of attempts) {
+  for (const facingMode of facingModes) {
     try {
-      await scanner.start(cameraConfig, config, onSuccess, () => {});
+      await scanner.start(
+        { facingMode },
+        buildScanConfig(facingMode),
+        onSuccess,
+        () => {},
+      );
       return;
     } catch (error) {
       lastError = error;
@@ -45,11 +71,22 @@ async function startWithFallback(scanner, config, onSuccess) {
 
   const cameras = await Html5Qrcode.getCameras();
   if (cameras?.length) {
-    const preferred = cameras.find((camera) => /back|rear|environment/i.test(camera.label));
-    const cameraId = (preferred || cameras[cameras.length - 1]).id;
+    const preferred = isLikelyMobile()
+      ? cameras.find((camera) => /back|rear|environment/i.test(camera.label))
+      : cameras.find((camera) => /front|user|facetime|integrated/i.test(camera.label));
+
+    const cameraId = (preferred || cameras[0]).id;
 
     try {
-      await scanner.start(cameraId, config, onSuccess, () => {});
+      await scanner.start(
+        cameraId,
+        {
+          fps: 15,
+          disableFlip: false,
+        },
+        onSuccess,
+        () => {},
+      );
       return;
     } catch (error) {
       lastError = error;
@@ -63,8 +100,10 @@ export default function QrScanner({ onScan }) {
   const [manualValue, setManualValue] = useState("");
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [error, setError] = useState("");
+  const [fileBusy, setFileBusy] = useState(false);
   const scannerRef = useRef(null);
   const onScanRef = useRef(onScan);
+  const fileInputRef = useRef(null);
   const regionId = useId().replace(/:/g, "");
 
   useEffect(() => {
@@ -87,21 +126,13 @@ export default function QrScanner({ onScan }) {
       setError("");
 
       try {
-        scanner = new Html5Qrcode(regionId);
+        scanner = new Html5Qrcode(regionId, SCANNER_CREATE_CONFIG);
         scannerRef.current = scanner;
 
-        const config = {
-          fps: 10,
-          aspectRatio: 1,
-          qrbox: (viewfinderWidth, viewfinderHeight) => {
-            const edge = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.75);
-            return { width: edge, height: edge };
-          },
-        };
-
-        await startWithFallback(scanner, config, (decodedText) => {
+        await startWithFallback(scanner, (decodedText) => {
           if (disposed) return;
           onScanRef.current(decodedText);
+          setManualValue(decodedText);
           setCameraEnabled(false);
         });
 
@@ -131,13 +162,53 @@ export default function QrScanner({ onScan }) {
     };
   }, [cameraEnabled, regionId]);
 
+  async function handleImageFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || cameraEnabled) return;
+
+    setFileBusy(true);
+    setError("");
+
+    const scanner = new Html5Qrcode(regionId, SCANNER_CREATE_CONFIG);
+
+    try {
+      const decodedText = await scanner.scanFile(file, true);
+      setManualValue(decodedText);
+      onScanRef.current(decodedText);
+    } catch {
+      setError("QR на изображении не найден. Попробуйте скриншот крупнее и без бликов.");
+    } finally {
+      await stopScanner(scanner);
+      setFileBusy(false);
+    }
+  }
+
   return (
     <section className="card">
       <h3>Сканировать QR</h3>
+      <p className="muted scanner-hint">
+        QR с экрана компьютера лучше читать крупным планом, без бликов. На ПК удобнее загрузить
+        скриншот.
+      </p>
       <div className="actions">
-        <button type="button" onClick={() => setCameraEnabled((prev) => !prev)}>
+        <button type="button" onClick={() => setCameraEnabled((prev) => !prev)} disabled={fileBusy}>
           {cameraEnabled ? "Остановить камеру" : "Запустить камеру"}
         </button>
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={cameraEnabled || fileBusy}
+        >
+          {fileBusy ? "Читаю файл..." : "Загрузить изображение"}
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={handleImageFile}
+        />
       </div>
       <div id={regionId} className="scanner" />
       {error ? <p className="error">{error}</p> : null}
