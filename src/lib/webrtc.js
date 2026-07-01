@@ -4,6 +4,7 @@ import {
   isValidChatMessage,
   trimChatHistory,
 } from "./protocol";
+import { packSignalDescription } from "./sdp";
 
 const RTC_CONFIG = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -88,7 +89,7 @@ export class WebRtcMesh {
     return {
       hostId: this.selfId,
       hostName: this.selfName,
-      signal: peer.pc.localDescription,
+      signal: packSignalDescription(peer.pc.localDescription),
     };
   }
 
@@ -109,7 +110,7 @@ export class WebRtcMesh {
       targetHostId: hostId,
       guestId: this.selfId,
       guestName: this.selfName,
-      signal: peer.pc.localDescription,
+      signal: packSignalDescription(peer.pc.localDescription),
     };
   }
 

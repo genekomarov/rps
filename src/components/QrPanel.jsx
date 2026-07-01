@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 
-export default function QrPanel({ value, title }) {
-  const [src, setSrc] = useState("");
+export default function QrPanel({ value, title }) {  const [src, setSrc] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -16,10 +15,10 @@ export default function QrPanel({ value, title }) {
 
       try {
         const dataUrl = await QRCode.toDataURL(value, {
-          margin: 1,
+          margin: 4,
           width: 240,
-        });
-        if (mounted) {
+          errorCorrectionLevel: "L",
+        });        if (mounted) {
           setSrc(dataUrl);
           setError("");
         }
@@ -40,8 +39,7 @@ export default function QrPanel({ value, title }) {
   return (
     <section className="card qr-panel">
       <h3>{title}</h3>
-      {src ? <img src={src} alt="QR code" className="qr-image" /> : <p>Нет данных для QR</p>}
-      {error ? <p className="error">{error}</p> : null}
+      {src ? <img src={src} alt="QR code" className="qr-image" /> : <p>Нет данных для QR</p>}      {error ? <p className="error">{error}</p> : null}
       <label className="field">
         <span>Payload (fallback)</span>
         <textarea readOnly value={value} rows={5} />

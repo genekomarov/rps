@@ -88,7 +88,7 @@ export default function App() {
       setError("");
       const offerBody = await meshRef.current.createHostOffer();
       const payload = createSignalPayload("host-offer", offerBody);
-      setHostOfferCode(encodeSignalPayload(payload));
+      setHostOfferCode(await encodeSignalPayload(payload));
       setStatus("waitingAnswer");
     } catch {
       setError("Не удалось создать приглашение");
@@ -99,12 +99,12 @@ export default function App() {
     if (!value?.trim() || !meshRef.current) return;
     try {
       setError("");
-      const parsed = decodeSignalPayload(value);
+      const parsed = await decodeSignalPayload(value);
 
       if (parsed.type === "host-offer") {
         const answerBody = await meshRef.current.acceptHostOffer(parsed.body);
         const payload = createSignalPayload("host-answer", answerBody);
-        setAnswerCode(encodeSignalPayload(payload));
+        setAnswerCode(await encodeSignalPayload(payload));
         return;
       }
 
