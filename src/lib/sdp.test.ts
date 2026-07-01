@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { SignalDescription } from "../types";
 import {
   countIceCandidatesInSdp,
   formatIceCandidateCounts,
@@ -47,7 +48,7 @@ describe("countIceCandidatesInSdp", () => {
 
 describe("formatIceCandidateCounts", () => {
   it("formats counts", () => {
-    expect(formatIceCandidateCounts({ host: 1, srflx: 2, relay: 3 })).toBe(
+    expect(formatIceCandidateCounts({ host: 1, srflx: 2, relay: 3, total: 6 })).toBe(
       "host=1, srflx=2, relay=3",
     );
   });
@@ -101,7 +102,7 @@ describe("packSignalDescription", () => {
     const packed = packSignalDescription({
       type: "offer",
       sdp: SAMPLE_SDP,
-    });
+    })!;
 
     expect(packed.type).toBe("offer");
     expect(packed.sdp).not.toContain("a=extmap:");
@@ -115,8 +116,12 @@ describe("packSignalDescription", () => {
 describe("toSessionDescription", () => {
   it("creates RTCSessionDescription with normalized sdp", () => {
     class MockRTCSessionDescription {
-      constructor(init) {
-        Object.assign(this, init);
+      type: RTCSdpType;
+      sdp: string;
+
+      constructor(init: RTCSessionDescriptionInit) {
+        this.type = init.type!;
+        this.sdp = init.sdp!;
       }
     }
     vi.stubGlobal("RTCSessionDescription", MockRTCSessionDescription);
@@ -133,7 +138,7 @@ describe("toSessionDescription", () => {
   });
 
   it("throws on invalid signal", () => {
-    expect(() => toSessionDescription({ type: "offer" })).toThrow(
+    expect(() => toSessionDescription({ type: "offer" } as SignalDescription)).toThrow(
       "Invalid signal description",
     );
   });

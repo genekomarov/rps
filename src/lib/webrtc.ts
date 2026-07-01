@@ -1,12 +1,82 @@
+import type {
+  ChatMessage,
+  Envelope,
+  HostAnswerBody,
+  HostOfferBody,
+  LogLevel,
+  MeshStatus,
+  PeerDiagnostic,
+  PeerListItem,
+  SignalDescription,
+} from "../types";
 import {
   ProtocolTypes,
   createEnvelope,
   isValidChatMessage,
   trimChatHistory,
 } from "./protocol";
-import { packSignalDescription, toSessionDescription, countIceCandidatesInSdp, formatIceCandidateCounts } from "./sdp";
+import {
+  countIceCandidatesInSdp,
+  formatIceCandidateCounts,
+  packSignalDescription,
+  toSessionDescription,
+} from "./sdp";
 
-const RTC_CONFIG = {
+interface IceGatherConfig {
+  primaryTimeoutMs: number;
+  fallbackMaxMs: number;
+  waitForRelay: boolean;
+}
+
+interface GatherIceOptions {
+  force?: boolean;
+  gatherConfig?: IceGatherConfig;
+}
+
+interface MeshPeer {
+  peerId: string;
+  peerName: string;
+  pc: RTCPeerConnection;
+  dc: RTCDataChannel | null;
+  isOpen: boolean;
+  initiator: boolean;
+  handshakeGuest: boolean;
+  iceRestartAttempts: number;
+  iceRestartTimer: ReturnType<typeof setTimeout> | null;
+  watchersAttached: boolean;
+}
+
+interface HelloPayload {
+  peerId?: string;
+  peerName?: string;
+  peers?: PeerListItem[];
+}
+
+interface HistorySyncPayload {
+  messages?: unknown[];
+}
+
+interface ForwardSignalPayload {
+  toId: string;
+  fromId: string;
+  signal: SignalDescription;
+}
+
+export interface WebRtcMeshOptions {
+  selfId: string;
+  selfName: string;
+  extendedRelayGather?: boolean;
+  onPeerListChange: (peers: PeerListItem[]) => void;
+  onMessage: (message: ChatMessage) => void;
+  onStatus: (status: MeshStatus) => void;
+  onError?: (message: string) => void;
+  onLog?: (level: LogLevel, message: string) => void;
+  onDiagnostics?: (diagnostics: PeerDiagnostic[]) => void;
+  onHandshakeOfferRefresh?: (offer: HostOfferBody) => void;
+  getHistory: () => ChatMessage[];
+}
+
+const RTC_CONFIG: RTCConfiguration = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:global.stun.twilio.com:3478" },
@@ -48,7 +118,7 @@ const DEFAULT_ICE_GATHER_CONFIG = {
   waitForRelay: false,
 };
 
-function buildIceGatherConfig(extendedRelayGather) {
+function buildIceGatherConfig(extendedRelayGather?: boolean): IceGatherConfig {
   if (!extendedRelayGather) {
     return { ...DEFAULT_ICE_GATHER_CONFIG };
   }
@@ -60,7 +130,12 @@ function buildIceGatherConfig(extendedRelayGather) {
   };
 }
 
-function logIceCandidateSummary(pc, log, prefix, level = "info") {
+function logIceCandidateSummary(
+  pc: RTCPeerConnection,
+  log: (level: LogLevel, message: string) => void,
+  prefix: string,
+  level: LogLevel = "info",
+) {
   const counts = countIceCandidatesInSdp(pc.localDescription?.sdp);
   log(level, `${prefix}: ${formatIceCandidateCounts(counts)}`);
   if (counts.total === 0) {
@@ -75,14 +150,22 @@ function logIceCandidateSummary(pc, log, prefix, level = "info") {
   }
 }
 
-function shouldWaitForRelay(pc, elapsedMs, gatherConfig) {
+function shouldWaitForRelay(
+  pc: RTCPeerConnection,
+  elapsedMs: number,
+  gatherConfig: IceGatherConfig,
+) {
   if (!gatherConfig.waitForRelay) return false;
   const counts = countIceCandidatesInSdp(pc.localDescription?.sdp);
   if (counts.relay > 0) return false;
   return elapsedMs < gatherConfig.fallbackMaxMs;
 }
 
-async function waitForIceGatheringComplete(pc, log, options = {}) {
+async function waitForIceGatheringComplete(
+  pc: RTCPeerConnection,
+  log: (level: LogLevel, message: string) => void,
+  options: GatherIceOptions = {},
+) {
   const gatherConfig = options.gatherConfig ?? DEFAULT_ICE_GATHER_CONFIG;
   const force = options.force ?? false;
   const countsNow = countIceCandidatesInSdp(pc.localDescription?.sdp);
@@ -102,7 +185,7 @@ async function waitForIceGatheringComplete(pc, log, options = {}) {
     : `до ${gatherConfig.primaryTimeoutMs / 1000} с`;
   log("info", `ICE: сбор сетевых кандидатов (${gatherHint})...`);
 
-  await new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     let done = false;
     const startedAt = Date.now();
     let relayExtended = false;
@@ -117,7 +200,7 @@ async function waitForIceGatheringComplete(pc, log, options = {}) {
       pc.removeEventListener("connectionstatechange", onClosed);
     }
 
-    function finish(message, level = "info") {
+    function finish(message: string, level: LogLevel = "info") {
       if (done) return;
       done = true;
       cleanup();
@@ -125,14 +208,14 @@ async function waitForIceGatheringComplete(pc, log, options = {}) {
       resolve();
     }
 
-    function fail(error) {
+    function fail(error: Error) {
       if (done) return;
       done = true;
       cleanup();
       reject(error);
     }
 
-    function tryFinish(message, level = "warn") {
+    function tryFinish(message: string, level: LogLevel = "warn") {
       const elapsed = Date.now() - startedAt;
       const counts = countIceCandidatesInSdp(pc.localDescription?.sdp);
 
@@ -158,7 +241,7 @@ async function waitForIceGatheringComplete(pc, log, options = {}) {
       finish(message, level);
     }
 
-    function onIceCandidate(event) {
+    function onIceCandidate(event: RTCPeerConnectionIceEvent) {
       if (event.candidate) return;
       sawEndOfCandidates = true;
       tryFinish("ICE: сбор завершён", "info");
@@ -206,7 +289,7 @@ async function waitForIceGatheringComplete(pc, log, options = {}) {
   });
 }
 
-function safeParse(value) {
+function safeParse(value: string): Envelope | null {
   try {
     return JSON.parse(value);
   } catch {
@@ -215,7 +298,23 @@ function safeParse(value) {
 }
 
 export class WebRtcMesh {
-  constructor(options) {
+  selfId: string;
+  selfName: string;
+  onPeerListChange: (peers: PeerListItem[]) => void;
+  onMessage: (message: ChatMessage) => void;
+  onStatus: (status: MeshStatus) => void;
+  onError?: (message: string) => void;
+  onLog?: (level: LogLevel, message: string) => void;
+  onDiagnostics?: (diagnostics: PeerDiagnostic[]) => void;
+  onHandshakeOfferRefresh?: (offer: HostOfferBody) => void;
+  getHistory: () => ChatMessage[];
+  iceGatherConfig: IceGatherConfig;
+  peerMap: Map<string, MeshPeer>;
+  seenEnvelopeIds: Set<string>;
+  pendingInvitePeerId: string | null;
+  closed: boolean;
+
+  constructor(options: WebRtcMeshOptions) {
     this.selfId = options.selfId;
     this.selfName = options.selfName;
     this.onPeerListChange = options.onPeerListChange;
@@ -234,27 +333,27 @@ export class WebRtcMesh {
     this.closed = false;
   }
 
-  log(level, message) {
+  log(level: LogLevel, message: string) {
     this.onLog?.(level, message);
   }
 
-  gatherIce(pc, options = {}) {
+  gatherIce(pc: RTCPeerConnection, options: Omit<GatherIceOptions, "gatherConfig"> = {}) {
     return waitForIceGatheringComplete(pc, this.log.bind(this), {
       ...options,
       gatherConfig: this.iceGatherConfig,
     });
   }
 
-  setSelfName(nextName) {
+  setSelfName(nextName: string) {
     this.selfName = nextName;
     this.log("info", `Ник обновлён: ${nextName}`);
   }
 
-  isPeerReady(peer) {
+  isPeerReady(peer: MeshPeer | null | undefined) {
     return Boolean(peer?.isOpen || peer?.dc?.readyState === "open");
   }
 
-  syncPeerReady(peer) {
+  syncPeerReady(peer: MeshPeer | null | undefined) {
     if (!peer) return false;
     if (peer.dc?.readyState === "open" && !peer.isOpen) {
       this.onDataChannelOpen(peer);
@@ -262,7 +361,7 @@ export class WebRtcMesh {
     return this.isPeerReady(peer);
   }
 
-  getDiagnostics() {
+  getDiagnostics(): PeerDiagnostic[] {
     return [...this.peerMap.values()].map((peer) => ({
       peerId: peer.peerId,
       peerName: peer.peerName,
@@ -278,7 +377,7 @@ export class WebRtcMesh {
     this.onDiagnostics?.(this.getDiagnostics());
   }
 
-  listPeers() {
+  listPeers(): PeerListItem[] {
     return [...this.peerMap.values()]
       .filter((peer) => this.syncPeerReady(peer))
       .map((peer) => ({
@@ -309,7 +408,7 @@ export class WebRtcMesh {
     this.pendingInvitePeerId = null;
   }
 
-  async createHostOffer() {
+  async createHostOffer(): Promise<HostOfferBody> {
     this.clearInvitePeers();
 
     const tempPeerId = `invite-${crypto.randomUUID()}`;
@@ -326,11 +425,11 @@ export class WebRtcMesh {
     return {
       hostId: this.selfId,
       hostName: this.selfName,
-      signal: packSignalDescription(peer.pc.localDescription),
+      signal: packSignalDescription(peer.pc.localDescription)!,
     };
   }
 
-  async acceptHostOffer(payload) {
+  async acceptHostOffer(payload: HostOfferBody): Promise<HostAnswerBody> {
     const hostId = payload?.hostId;
     if (!hostId || !payload?.signal) {
       throw new Error("Некорректное приглашение хоста");
@@ -370,11 +469,11 @@ export class WebRtcMesh {
       targetHostId: hostId,
       guestId: this.selfId,
       guestName: this.selfName,
-      signal: packSignalDescription(peer.pc.localDescription),
+      signal: packSignalDescription(peer.pc.localDescription)!,
     };
   }
 
-  async acceptHostOfferUpdate(payload, peer) {
+  async acceptHostOfferUpdate(payload: HostOfferBody, peer: MeshPeer): Promise<HostAnswerBody> {
     const hostId = payload?.hostId;
     if (!hostId || !payload?.signal || !peer) {
       throw new Error("Некорректное обновление приглашения");
@@ -414,11 +513,11 @@ export class WebRtcMesh {
       targetHostId: hostId,
       guestId: this.selfId,
       guestName: this.selfName,
-      signal: packSignalDescription(peer.pc.localDescription),
+      signal: packSignalDescription(peer.pc.localDescription)!,
     };
   }
 
-  async completeHostHandshake(payload) {
+  async completeHostHandshake(payload: HostAnswerBody): Promise<void> {
     const guestId = payload?.guestId;
     if (!guestId || !payload?.signal) {
       throw new Error("Некорректный ответ гостя");
@@ -460,7 +559,7 @@ export class WebRtcMesh {
     this.startDataChannelWait(invitePeer);
   }
 
-  startDataChannelWait(peer) {
+  startDataChannelWait(peer: MeshPeer) {
     const failCheck = setTimeout(() => {
       if (this.closed || this.isPeerReady(peer)) return;
       const ice = peer.pc.iceConnectionState;
@@ -484,7 +583,7 @@ export class WebRtcMesh {
     });
   }
 
-  async connectToKnownPeer(peerId, peerName) {
+  async connectToKnownPeer(peerId: string, peerName: string) {
     if (!peerId || peerId === this.selfId || this.peerMap.has(peerId)) return;
     const peer = this.ensurePeer(peerId, true, peerName || peerId);
     const offer = await peer.pc.createOffer();
@@ -501,11 +600,11 @@ export class WebRtcMesh {
     );
   }
 
-  sendChatMessage(message) {
+  sendChatMessage(message: ChatMessage) {
     this.broadcastEnvelope(createEnvelope(ProtocolTypes.chatMessage, message), null);
   }
 
-  waitForDataChannel(peer) {
+  waitForDataChannel(peer: MeshPeer): Promise<void> {
     if (this.syncPeerReady(peer)) {
       return Promise.resolve();
     }
@@ -513,9 +612,9 @@ export class WebRtcMesh {
     return new Promise((resolve, reject) => {
       let done = false;
       let attempt = 0;
-      let logTimer;
+      let logTimer: ReturnType<typeof setInterval>;
 
-      const finish = (error) => {
+      const finish = (error?: Error) => {
         if (done) return;
         done = true;
         clearInterval(logTimer);
@@ -587,7 +686,7 @@ export class WebRtcMesh {
         }
       };
 
-      const onDataChannel = (event) => {
+      const onDataChannel = (event: RTCDataChannelEvent) => {
         this.attachDataChannel(peer, event.channel);
         if (peer.dc?.readyState === "open") {
           onChannelOpen();
@@ -608,7 +707,7 @@ export class WebRtcMesh {
     });
   }
 
-  scheduleHostIceRestart(peer) {
+  scheduleHostIceRestart(peer: MeshPeer) {
     if (this.closed || this.isPeerReady(peer) || !peer.initiator) return;
     if ((peer.iceRestartAttempts ?? 0) >= ICE_RESTART_MAX_ATTEMPTS) return;
     if (peer.iceRestartTimer) return;
@@ -619,7 +718,7 @@ export class WebRtcMesh {
     }, ICE_RESTART_DELAY_MS);
   }
 
-  async refreshHostOffer(peer) {
+  async refreshHostOffer(peer: MeshPeer) {
     if (this.closed || this.isPeerReady(peer) || !peer.initiator) return;
     if ((peer.iceRestartAttempts ?? 0) >= ICE_RESTART_MAX_ATTEMPTS) return;
 
@@ -653,7 +752,7 @@ export class WebRtcMesh {
       this.onHandshakeOfferRefresh?.({
         hostId: this.selfId,
         hostName: this.selfName,
-        signal: packSignalDescription(peer.pc.localDescription),
+        signal: packSignalDescription(peer.pc.localDescription)!,
       });
       this.log("info", "Хост: новое приглашение готово — передайте его гостю и вставьте новый ответ");
     } catch (error) {
@@ -664,7 +763,7 @@ export class WebRtcMesh {
     }
   }
 
-  async recreateHostPeerOffer(oldPeer) {
+  async recreateHostPeerOffer(oldPeer: MeshPeer) {
     const { peerId, peerName } = oldPeer;
     if (oldPeer.iceRestartTimer) {
       clearTimeout(oldPeer.iceRestartTimer);
@@ -686,17 +785,17 @@ export class WebRtcMesh {
     this.onHandshakeOfferRefresh?.({
       hostId: this.selfId,
       hostName: this.selfName,
-      signal: packSignalDescription(peer.pc.localDescription),
+      signal: packSignalDescription(peer.pc.localDescription)!,
     });
     this.log("info", "Хост: peer пересоздан — передайте новое приглашение гостю");
     this.startDataChannelWait(peer);
   }
 
-  attachPeerWatchers(peer) {
+  attachPeerWatchers(peer: MeshPeer) {
     if (peer.watchersAttached) return;
     peer.watchersAttached = true;
 
-    const logState = (prefix) => {
+    const logState = (prefix: string) => {
       this.log(
         "debug",
         `${prefix} ${peer.peerName || peer.peerId}: ICE=${peer.pc.iceConnectionState}, PC=${peer.pc.connectionState}, DC=${peer.dc?.readyState ?? "none"}`,
@@ -761,12 +860,12 @@ export class WebRtcMesh {
     });
   }
 
-  ensurePeer(peerId, initiator, peerName = "") {
+  ensurePeer(peerId: string, initiator: boolean, peerName = ""): MeshPeer {
     const existing = this.peerMap.get(peerId);
     if (existing) return existing;
 
     const pc = new RTCPeerConnection(RTC_CONFIG);
-    const peer = {
+    const peer: MeshPeer = {
       peerId,
       peerName,
       pc,
@@ -799,7 +898,7 @@ export class WebRtcMesh {
     return peer;
   }
 
-  onDataChannelOpen(peer) {
+  onDataChannelOpen(peer: MeshPeer) {
     if (peer.isOpen) return;
 
     peer.isOpen = true;
@@ -817,7 +916,7 @@ export class WebRtcMesh {
     }));
   }
 
-  attachDataChannel(peer, dc) {
+  attachDataChannel(peer: MeshPeer, dc: RTCDataChannel) {
     if (peer.dc && peer.dc !== dc) {
       peer.dc.close();
     }
@@ -832,7 +931,7 @@ export class WebRtcMesh {
 
     dc.addEventListener("message", (event) => {
       this.syncPeerReady(peer);
-      this.handleIncomingEnvelope(peer.peerId, safeParse(event.data));
+      this.handleIncomingEnvelope(peer.peerId, safeParse(String(event.data)));
     });
 
     if (dc.readyState === "open") {
@@ -844,13 +943,13 @@ export class WebRtcMesh {
     this.publishDiagnostics();
   }
 
-  sendDirect(peer, envelope) {
+  sendDirect(peer: MeshPeer, envelope: Envelope) {
     this.syncPeerReady(peer);
     if (!peer?.dc || peer.dc.readyState !== "open") return;
     peer.dc.send(JSON.stringify(envelope));
   }
 
-  broadcastEnvelope(envelope, exceptPeerId) {
+  broadcastEnvelope(envelope: Envelope, exceptPeerId: string | null) {
     this.seenEnvelopeIds.add(envelope.id);
     for (const peer of this.peerMap.values()) {
       if (!this.syncPeerReady(peer)) continue;
@@ -859,7 +958,7 @@ export class WebRtcMesh {
     }
   }
 
-  async handleIncomingEnvelope(fromPeerId, envelope) {
+  async handleIncomingEnvelope(fromPeerId: string, envelope: Envelope | null) {
     if (!envelope?.id || this.seenEnvelopeIds.has(envelope.id)) return;
     this.seenEnvelopeIds.add(envelope.id);
 
@@ -872,8 +971,9 @@ export class WebRtcMesh {
     }
 
     if (envelope.type === ProtocolTypes.historySync) {
-      const messages = Array.isArray(envelope?.payload?.messages)
-        ? envelope.payload.messages.filter(isValidChatMessage)
+      const payload = envelope.payload as HistorySyncPayload;
+      const messages = Array.isArray(payload.messages)
+        ? payload.messages.filter(isValidChatMessage)
         : [];
       this.log("info", `Синхронизация истории: ${messages.length} сообщений`);
       for (const message of messages) {
@@ -883,15 +983,14 @@ export class WebRtcMesh {
     }
 
     if (envelope.type === ProtocolTypes.hello) {
-      this.log("info", `Hello от ${envelope.payload?.peerName || fromPeerId}`);
+      const payload = envelope.payload as HelloPayload;
+      this.log("info", `Hello от ${payload.peerName || fromPeerId}`);
       const peer = this.peerMap.get(fromPeerId);
-      if (peer && envelope.payload?.peerName) {
-        peer.peerName = envelope.payload.peerName;
+      if (peer && payload.peerName) {
+        peer.peerName = payload.peerName;
       }
 
-      const peers = Array.isArray(envelope.payload?.peers)
-        ? envelope.payload.peers
-        : [];
+      const peers = Array.isArray(payload.peers) ? payload.peers : [];
       for (const knownPeer of peers) {
         const peerId = knownPeer?.id;
         if (!peerId || peerId === this.selfId || this.peerMap.has(peerId)) continue;
@@ -906,7 +1005,7 @@ export class WebRtcMesh {
 
     if (envelope.type !== ProtocolTypes.forwardSignal) return;
 
-    const { toId, fromId, signal } = envelope.payload || {};
+    const { toId, fromId, signal } = (envelope.payload as Partial<ForwardSignalPayload>) || {};
     if (!toId || !fromId || !signal) return;
 
     if (toId !== this.selfId) {
@@ -934,7 +1033,7 @@ export class WebRtcMesh {
         );
       }
     } catch (error) {
-      this.onError(error instanceof Error ? error.message : "WebRTC signal failed");
+      this.onError?.(error instanceof Error ? error.message : "WebRTC signal failed");
     }
   }
 

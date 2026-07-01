@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import QRCode from "qrcode";
+import QRCode, { type QRCodeToDataURLOptions } from "qrcode";
 
-function qrRenderOptions(value) {
+function qrRenderOptions(value: string): QRCodeToDataURLOptions {
   const length = value.length;
 
   if (length > 1800) {
@@ -15,7 +15,12 @@ function qrRenderOptions(value) {
   return { width: 360, margin: 4, errorCorrectionLevel: "M" };
 }
 
-export default function QrPanel({ value, title }) {
+interface QrPanelProps {
+  value: string;
+  title: string;
+}
+
+export default function QrPanel({ value, title }: QrPanelProps) {
   const [src, setSrc] = useState("");
   const [error, setError] = useState("");
 
@@ -42,7 +47,7 @@ export default function QrPanel({ value, title }) {
       }
     }
 
-    generate();
+    void generate();
     return () => {
       mounted = false;
     };

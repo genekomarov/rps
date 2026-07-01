@@ -1,6 +1,8 @@
+import type { LogEntry, LogLevel } from "../types";
+
 export const LOG_LIMIT = 200;
 
-export function formatLogTime(timestamp = Date.now()) {
+export function formatLogTime(timestamp: number = Date.now()): string {
   return new Date(timestamp).toLocaleTimeString("ru-RU", {
     hour: "2-digit",
     minute: "2-digit",
@@ -8,7 +10,7 @@ export function formatLogTime(timestamp = Date.now()) {
   });
 }
 
-export function createLogEntry(level, message) {
+export function createLogEntry(level: LogLevel, message: string): LogEntry {
   return {
     id: crypto.randomUUID(),
     time: Date.now(),
@@ -17,7 +19,7 @@ export function createLogEntry(level, message) {
   };
 }
 
-export function trimLogEntries(entries, limit = LOG_LIMIT) {
+export function trimLogEntries(entries: LogEntry[], limit: number = LOG_LIMIT): LogEntry[] {
   if (entries.length <= limit) return entries;
   return entries.slice(entries.length - limit);
 }

@@ -1,4 +1,5 @@
 import { PHASE } from "../lib/sessionPhase";
+import type { SessionPhase } from "../types";
 
 const STEPS = [
   { id: PHASE.SETUP, label: "Ник" },
@@ -6,9 +7,9 @@ const STEPS = [
   { id: PHASE.HOST_OFFER, label: "Приглашение" },
   { id: PHASE.GUEST_ANSWER, label: "Ответ" },
   { id: PHASE.CHAT, label: "Чат" },
-];
+] as const;
 
-function stepIndex(phase) {
+function stepIndex(phase: SessionPhase): number {
   if (phase === PHASE.CONNECTING) return 3;
   if (phase === PHASE.GUEST_ANSWER) return 3;
   if (phase === PHASE.HOST_OFFER) return 2;
@@ -17,7 +18,14 @@ function stepIndex(phase) {
   return 0;
 }
 
-export default function HandshakeSteps({ phase, title, hint, busyLabel }) {
+interface HandshakeStepsProps {
+  phase: SessionPhase;
+  title: string;
+  hint: string;
+  busyLabel: string;
+}
+
+export default function HandshakeSteps({ phase, title, hint, busyLabel }: HandshakeStepsProps) {
   const active = stepIndex(phase);
 
   return (

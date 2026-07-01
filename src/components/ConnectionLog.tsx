@@ -1,8 +1,15 @@
 import { useEffect, useRef } from "react";
 import { formatLogTime } from "../lib/connectionLog";
+import type { LogEntry, PeerDiagnostic } from "../types";
 
-export default function ConnectionLog({ entries, diagnostics, onClear }) {
-  const bodyRef = useRef(null);
+interface ConnectionLogProps {
+  entries: LogEntry[];
+  diagnostics: PeerDiagnostic[];
+  onClear: () => void;
+}
+
+export default function ConnectionLog({ entries, diagnostics, onClear }: ConnectionLogProps) {
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const node = bodyRef.current;

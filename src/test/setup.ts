@@ -1,11 +1,11 @@
 import { CompressionStream, DecompressionStream } from "node:stream/web";
 
 if (!globalThis.CompressionStream) {
-  globalThis.CompressionStream = CompressionStream;
+  globalThis.CompressionStream = CompressionStream as typeof globalThis.CompressionStream;
 }
 
 if (!globalThis.DecompressionStream) {
-  globalThis.DecompressionStream = DecompressionStream;
+  globalThis.DecompressionStream = DecompressionStream as typeof globalThis.DecompressionStream;
 }
 
 if (!globalThis.crypto?.randomUUID) {

@@ -1,19 +1,21 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
 import { Html5Qrcode } from "html5-qrcode";
+import type { LogLevel } from "../types";
 
 const SCANNER_STATE = {
   NOT_STARTED: 1,
   SCANNING: 2,
   PAUSED: 3,
-};
+} as const;
 
 const SCANNER_CREATE_CONFIG = {
+  verbose: false,
   experimentalFeatures: {
     useBarCodeDetectorIfSupported: true,
   },
 };
 
-function isLikelyMobile() {
+function isLikelyMobile(): boolean {
   return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 }
 
@@ -24,7 +26,7 @@ function buildScanConfig() {
   };
 }
 
-async function stopScanner(scanner) {
+async function stopScanner(scanner: Html5Qrcode | null | undefined): Promise<void> {
   if (!scanner) return;
 
   try {
@@ -43,22 +45,21 @@ async function stopScanner(scanner) {
   }
 }
 
-async function startWithFallback(scanner, onSuccess, onLog) {
+async function startWithFallback(
+  scanner: Html5Qrcode,
+  onSuccess: (decodedText: string) => void,
+  onLog?: (level: LogLevel, message: string) => void,
+): Promise<void> {
   const facingModes = isLikelyMobile()
-    ? ["environment", "user"]
-    : ["user", "environment"];
+    ? (["environment", "user"] as const)
+    : (["user", "environment"] as const);
 
-  let lastError;
+  let lastError: unknown;
 
   for (const facingMode of facingModes) {
     try {
       onLog?.("info", `Камера: пробуем ${facingMode}`);
-      await scanner.start(
-        { facingMode },
-        buildScanConfig(),
-        onSuccess,
-        () => {},
-      );
+      await scanner.start({ facingMode }, buildScanConfig(), onSuccess, () => {});
       onLog?.("info", "Камера запущена");
       return;
     } catch (error) {
@@ -87,15 +88,21 @@ async function startWithFallback(scanner, onSuccess, onLog) {
   throw lastError || new Error("Не удалось открыть камеру");
 }
 
-export default function QrScanner({ onScan, onLog, disabled = false }) {
+interface QrScannerProps {
+  onScan: (value: string) => void | Promise<void>;
+  onLog?: (level: LogLevel, message: string) => void;
+  disabled?: boolean;
+}
+
+export default function QrScanner({ onScan, onLog, disabled = false }: QrScannerProps) {
   const [manualValue, setManualValue] = useState("");
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [error, setError] = useState("");
   const [fileBusy, setFileBusy] = useState(false);
-  const scannerRef = useRef(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
   const onScanRef = useRef(onScan);
   const onLogRef = useRef(onLog);
-  const fileInputRef = useRef(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const regionId = useId().replace(/:/g, "");
 
   useEffect(() => {
@@ -116,7 +123,7 @@ export default function QrScanner({ onScan, onLog, disabled = false }) {
     }
 
     let disposed = false;
-    let scanner;
+    let scanner: Html5Qrcode | undefined;
 
     async function run() {
       setError("");
@@ -125,13 +132,17 @@ export default function QrScanner({ onScan, onLog, disabled = false }) {
         scanner = new Html5Qrcode(regionId, SCANNER_CREATE_CONFIG);
         scannerRef.current = scanner;
 
-        await startWithFallback(scanner, (decodedText) => {
-          if (disposed) return;
-          onLogRef.current?.("info", "QR распознан камерой");
-          onScanRef.current(decodedText);
-          setManualValue(decodedText);
-          setCameraEnabled(false);
-        }, onLogRef.current);
+        await startWithFallback(
+          scanner,
+          (decodedText) => {
+            if (disposed) return;
+            onLogRef.current?.("info", "QR распознан камерой");
+            void onScanRef.current(decodedText);
+            setManualValue(decodedText);
+            setCameraEnabled(false);
+          },
+          onLogRef.current,
+        );
 
         if (disposed) {
           await stopScanner(scanner);
@@ -147,7 +158,7 @@ export default function QrScanner({ onScan, onLog, disabled = false }) {
       }
     }
 
-    run();
+    void run();
 
     return () => {
       disposed = true;
@@ -160,7 +171,7 @@ export default function QrScanner({ onScan, onLog, disabled = false }) {
     };
   }, [cameraEnabled, disabled, regionId]);
 
-  async function handleImageFile(event) {
+  async function handleImageFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || cameraEnabled || disabled) return;
@@ -175,7 +186,7 @@ export default function QrScanner({ onScan, onLog, disabled = false }) {
       const decodedText = await scanner.scanFile(file, true);
       setManualValue(decodedText);
       onLogRef.current?.("info", "QR распознан из файла");
-      onScanRef.current(decodedText);
+      void onScanRef.current(decodedText);
     } catch {
       setError("QR на изображении не найден");
       onLogRef.current?.("warn", "QR на изображении не найден");
@@ -188,7 +199,7 @@ export default function QrScanner({ onScan, onLog, disabled = false }) {
   function applyManual() {
     if (!manualValue.trim() || disabled) return;
     onLogRef.current?.("info", "Применение payload из поля ввода");
-    onScan(manualValue);
+    void onScan(manualValue);
   }
 
   return (

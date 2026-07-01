@@ -1,11 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ProtocolTypes, createEnvelope } from "./protocol";
 import { WebRtcMesh } from "./webrtc";
-import { installWebRtcGlobals } from "../test/webrtcMocks";
+import {
+  installWebRtcGlobals,
+  type MockPeerConnection,
+} from "../test/webrtcMocks";
+import type { WebRtcMeshOptions } from "./webrtc";
+import type { SignalDescription } from "../types";
 
-let webrtcGlobals;
+let webrtcGlobals: ReturnType<typeof installWebRtcGlobals>;
 
-function createMesh(overrides = {}) {
+function createMesh(overrides: Partial<WebRtcMeshOptions> = {}) {
   const callbacks = {
     onPeerListChange: vi.fn(),
     onMessage: vi.fn(),
@@ -64,7 +69,7 @@ describe("WebRtcMesh", () => {
   it("throws on invalid host offer", async () => {
     const { mesh } = createMesh();
 
-    await expect(mesh.acceptHostOffer({})).rejects.toThrow("Некорректное приглашение хоста");
+    await expect(mesh.acceptHostOffer({} as never)).rejects.toThrow("Некорректное приглашение хоста");
   });
 
   it("completes host handshake and renames invite peer", async () => {
@@ -75,7 +80,7 @@ describe("WebRtcMesh", () => {
     const guestAnswer = await guest.mesh.acceptHostOffer({
       hostId: "host-1",
       hostName: "Host",
-      signal: webrtcGlobals.instances[0].localDescription,
+      signal: webrtcGlobals.instances[0].localDescription as SignalDescription,
     });
 
     await host.mesh.completeHostHandshake(guestAnswer);
@@ -91,6 +96,7 @@ describe("WebRtcMesh", () => {
       mesh.completeHostHandshake({
         guestId: "guest-1",
         guestName: "Guest",
+        targetHostId: "host-1",
         signal: { type: "answer", sdp: "v=0\r\n" },
       }),
     ).rejects.toThrow("Нет активного приглашения");
@@ -100,11 +106,11 @@ describe("WebRtcMesh", () => {
     const { mesh } = createMesh();
     await mesh.createHostOffer();
 
-    const peer = mesh.peerMap.values().next().value;
+    const peer = mesh.peerMap.values().next().value!;
     expect(mesh.isPeerReady(peer)).toBe(false);
     expect(mesh.listPeers()).toEqual([]);
 
-    peer.pc.getDataChannel()._setOpen();
+    (peer.pc as unknown as MockPeerConnection).getDataChannel()!._setOpen();
 
     expect(mesh.isPeerReady(peer)).toBe(true);
     expect(mesh.listPeers()).toEqual([
@@ -118,7 +124,7 @@ describe("WebRtcMesh", () => {
   it("broadcasts chat messages to ready peers", async () => {
     const { mesh, callbacks } = createMesh();
     const peer = mesh.ensurePeer("peer-2", true, "Peer");
-    const dc = peer.pc.getDataChannel();
+    const dc = (peer.pc as unknown as MockPeerConnection).getDataChannel()!;
     peer.isOpen = true;
     dc.readyState = "open";
 
@@ -165,7 +171,7 @@ describe("WebRtcMesh", () => {
     ];
     const { mesh } = createMesh({ getHistory: () => history });
     const peer = mesh.ensurePeer("peer-2", true, "Peer");
-    const dc = peer.pc.getDataChannel();
+    const dc = (peer.pc as unknown as MockPeerConnection).getDataChannel()!;
     dc.readyState = "open";
 
     mesh.onDataChannelOpen(peer);
@@ -251,7 +257,7 @@ describe("WebRtcMesh", () => {
 
     await mesh.handleIncomingEnvelope("relay-peer", envelope);
 
-    const peer = mesh.peerMap.get("peer-3");
+    const peer = mesh.peerMap.get("peer-3")!;
     expect(peer).toBeTruthy();
     expect(peer.pc.createAnswer).toHaveBeenCalled();
   });

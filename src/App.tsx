@@ -14,6 +14,15 @@ import {
 import { getPhaseMeta, resolvePhase } from "./lib/sessionPhase";
 import { loadState, resetSessionState, saveState } from "./lib/storage";
 import { WebRtcMesh } from "./lib/webrtc";
+import type {
+  ChatMessage,
+  HostAnswerBody,
+  HostOfferBody,
+  LogEntry,
+  LogLevel,
+  PeerDiagnostic,
+  PeerListItem,
+} from "./types";
 
 const HISTORY_LIMIT = 100;
 
@@ -24,21 +33,23 @@ export default function App() {
   const [nicknameDraft, setNicknameDraft] = useState(
     stored.nicknameDraft || stored.nickname || "",
   );
-  const [messages, setMessages] = useState(trimChatHistory(stored.messages || [], HISTORY_LIMIT));
-  const [peers, setPeers] = useState([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(
+    trimChatHistory(stored.messages || [], HISTORY_LIMIT),
+  );
+  const [peers, setPeers] = useState<PeerListItem[]>([]);
   const [chatDraft, setChatDraft] = useState("");
   const [hostOfferCode, setHostOfferCode] = useState("");
   const [answerCode, setAnswerCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState("");
-  const [logEntries, setLogEntries] = useState([]);
-  const [diagnostics, setDiagnostics] = useState([]);
+  const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
+  const [diagnostics, setDiagnostics] = useState<PeerDiagnostic[]>([]);
   const [extendedRelayGather, setExtendedRelayGather] = useState(
     Boolean(stored.extendedRelayGather),
   );
 
-  const meshRef = useRef(null);
+  const meshRef = useRef<WebRtcMesh | null>(null);
   const resettingRef = useRef(false);
   const messagesRef = useRef(messages);
   const messageIdsRef = useRef(new Set(messages.map((item) => item.id)));
@@ -47,11 +58,11 @@ export default function App() {
   const phaseMeta = getPhaseMeta(phase);
   const isChatReady = phase === "chat";
 
-  const appendLog = useCallback((level, message) => {
+  const appendLog = useCallback((level: LogLevel, message: string) => {
     setLogEntries((prev) => trimLogEntries([...prev, createLogEntry(level, message)]));
   }, []);
 
-  const runBusy = useCallback(async (label, task) => {
+  const runBusy = useCallback(async <T,>(label: string, task: () => Promise<T>) => {
     setBusy(true);
     setBusyLabel(label);
     setError("");
@@ -147,10 +158,11 @@ export default function App() {
   }
 
   async function becomeHost() {
-    if (!meshRef.current) return;
+    const mesh = meshRef.current;
+    if (!mesh) return;
 
     await runBusy("Создаём приглашение (сбор сетевых адресов)...", async () => {
-      const offerBody = await meshRef.current.createHostOffer();
+      const offerBody = await mesh.createHostOffer();
       const payload = createSignalPayload("host-offer", offerBody);
       const encoded = await encodeSignalPayload(payload);
       setHostOfferCode(encoded);
@@ -161,10 +173,11 @@ export default function App() {
     });
   }
 
-  const handleScannedValue = useCallback(async (value) => {
+  const handleScannedValue = useCallback(async (value: string) => {
     if (!value?.trim()) return;
 
-    if (!meshRef.current) {
+    const mesh = meshRef.current;
+    if (!mesh) {
       const message = "Сначала сохраните ник";
       setError(message);
       appendLog("warn", message);
@@ -177,7 +190,7 @@ export default function App() {
       appendLog("info", `Тип сигнала: ${parsed.type}`);
 
       if (parsed.type === "host-offer") {
-        const answerBody = await meshRef.current.acceptHostOffer(parsed.body);
+        const answerBody = await mesh.acceptHostOffer(parsed.body as HostOfferBody);
         const payload = createSignalPayload("host-answer", answerBody);
         const encoded = await encodeSignalPayload(payload);
         setAnswerCode(encoded);
@@ -186,7 +199,7 @@ export default function App() {
       }
 
       if (parsed.type === "host-answer") {
-        await meshRef.current.completeHostHandshake(parsed.body);
+        await mesh.completeHostHandshake(parsed.body as HostAnswerBody);
         appendLog("info", "Хост применил ответ. Ожидаем открытие чата у обоих участников.");
         return;
       }

@@ -8,7 +8,7 @@ describe("resolvePhase", () => {
         nickname: "Alice",
         hostOfferCode: "code",
         answerCode: "answer",
-        peers: [{ id: "p1" }],
+        peers: [{ id: "p1", name: "Peer 1" }],
         busy: true,
       }),
     ).toBe(PHASE.CONNECTING);
@@ -20,7 +20,7 @@ describe("resolvePhase", () => {
         nickname: "Alice",
         hostOfferCode: "",
         answerCode: "",
-        peers: [{ id: "p1" }],
+        peers: [{ id: "p1", name: "Peer 1" }],
         busy: false,
       }),
     ).toBe(PHASE.CHAT);

@@ -3,17 +3,23 @@ import { loadState, resetSessionState, resetState, saveState } from "./storage";
 
 const STORAGE_KEY = "rpschat.state.v1";
 
-function createStorage() {
-  const store = new Map();
+function createStorage(): Storage {
+  const store = new Map<string, string>();
 
   return {
-    getItem(key) {
-      return store.has(key) ? store.get(key) : null;
+    get length() {
+      return store.size;
     },
-    setItem(key, value) {
+    key(index: number) {
+      return [...store.keys()][index] ?? null;
+    },
+    getItem(key: string) {
+      return store.has(key) ? store.get(key)! : null;
+    },
+    setItem(key: string, value: string) {
       store.set(key, String(value));
     },
-    removeItem(key) {
+    removeItem(key: string) {
       store.delete(key);
     },
     clear() {
@@ -23,12 +29,14 @@ function createStorage() {
 }
 
 describe("storage", () => {
+  const originalWindow = globalThis.window;
+
   beforeEach(() => {
-    globalThis.window = { localStorage: createStorage() };
+    globalThis.window = { localStorage: createStorage() } as Window & typeof globalThis;
   });
 
   afterEach(() => {
-    delete globalThis.window;
+    globalThis.window = originalWindow;
   });
 
   it("returns defaults when storage is empty", () => {
@@ -47,8 +55,16 @@ describe("storage", () => {
     saveState({
       clientId: "client-1",
       nickname: "Alice",
-      messages: [{ id: "m1" }],
-      peers: [{ id: "p1" }],
+      messages: [
+        {
+          id: "m1",
+          authorId: "u1",
+          authorName: "Alice",
+          text: "hi",
+          timestamp: 1,
+        },
+      ],
+      peers: [{ id: "p1", name: "Peer" }],
       extendedRelayGather: true,
     });
 
@@ -56,7 +72,7 @@ describe("storage", () => {
       clientId: "client-1",
       nickname: "Alice",
       messages: [{ id: "m1" }],
-      peers: [{ id: "p1" }],
+      peers: [{ id: "p1", name: "Peer" }],
       extendedRelayGather: true,
     });
   });
@@ -73,8 +89,16 @@ describe("storage", () => {
     saveState({
       nickname: "Alice",
       nicknameDraft: "Alice",
-      messages: [{ id: "m1" }],
-      peers: [{ id: "p1" }],
+      messages: [
+        {
+          id: "m1",
+          authorId: "u1",
+          authorName: "Alice",
+          text: "hi",
+          timestamp: 1,
+        },
+      ],
+      peers: [{ id: "p1", name: "Peer" }],
       clientId: "client-1",
     });
 
@@ -103,11 +127,13 @@ describe("storage", () => {
   });
 
   it("no-ops when window is unavailable", () => {
-    delete globalThis.window;
+    Reflect.deleteProperty(globalThis, "window");
 
     expect(loadState().nickname).toBe("");
     expect(() => saveState({ nickname: "X" })).not.toThrow();
     expect(() => resetState()).not.toThrow();
     expect(resetSessionState()).toEqual({ nickname: "", nicknameDraft: "" });
+
+    globalThis.window = originalWindow;
   });
 });

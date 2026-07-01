@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { LogEntry } from "../types";
 import {
   LOG_LIMIT,
   createLogEntry,
@@ -24,16 +25,22 @@ describe("connectionLog", () => {
   it("trims log entries to limit", () => {
     const entries = Array.from({ length: LOG_LIMIT + 5 }, (_, index) => ({
       id: String(index),
-    }));
+      time: index,
+      level: "info" as const,
+      message: "test",
+    })) satisfies LogEntry[];
 
     const trimmed = trimLogEntries(entries);
     expect(trimmed).toHaveLength(LOG_LIMIT);
     expect(trimmed[0].id).toBe("5");
-    expect(trimmed.at(-1).id).toBe(String(LOG_LIMIT + 4));
+    expect(trimmed.at(-1)?.id).toBe(String(LOG_LIMIT + 4));
   });
 
   it("returns same array when within limit", () => {
-    const entries = [{ id: "1" }, { id: "2" }];
+    const entries: LogEntry[] = [
+      { id: "1", time: 1, level: "info", message: "a" },
+      { id: "2", time: 2, level: "info", message: "b" },
+    ];
     expect(trimLogEntries(entries)).toBe(entries);
   });
 });

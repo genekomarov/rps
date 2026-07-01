@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { HostAnswerBody, HostOfferBody } from "../types";
 import {
   ProtocolTypes,
   createChatMessage,
@@ -10,7 +11,7 @@ import {
   trimChatHistory,
 } from "./protocol";
 
-const HOST_OFFER_BODY = {
+const HOST_OFFER_BODY: HostOfferBody = {
   hostId: "host-1",
   hostName: "Alice",
   signal: {
@@ -19,7 +20,7 @@ const HOST_OFFER_BODY = {
   },
 };
 
-const HOST_ANSWER_BODY = {
+const HOST_ANSWER_BODY: HostAnswerBody = {
   targetHostId: "host-1",
   guestId: "guest-1",
   guestName: "Bob",
@@ -144,8 +145,8 @@ describe("encodeSignalPayload / decodeSignalPayload", () => {
 
     const decoded = await decodeSignalPayload(encoded);
     expect(decoded.type).toBe("host-offer");
-    expect(decoded.body.hostId).toBe("host-1");
-    expect(decoded.body.signal.type).toBe("offer");
+    expect((decoded.body as HostOfferBody).hostId).toBe("host-1");
+    expect((decoded.body as HostOfferBody).signal.type).toBe("offer");
   });
 
   it("throws on empty payload", async () => {

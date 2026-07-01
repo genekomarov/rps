@@ -1,20 +1,36 @@
+import type {
+  ChatMessage,
+  Envelope,
+  HostAnswerBody,
+  HostOfferBody,
+  ProtocolType,
+  SignalPayload,
+  SignalType,
+} from "../types";
+
 const SIGNAL_VERSION = 2;
 const SIGNAL_PREFIX = "rps://";
 const SIGNAL_PREFIX_V1 = "rpschat://signal/";
 const CHAT_HISTORY_LIMIT = 100;
 
-const TYPE_TO_CODE = { "host-offer": 0, "host-answer": 1 };
-const CODE_TO_TYPE = ["host-offer", "host-answer"];
-const SDP_TYPE_TO_CODE = { offer: 0, answer: 1, pranswer: 2, rollback: 3 };
-const CODE_TO_SDP_TYPE = ["offer", "answer", "pranswer", "rollback"];
+const TYPE_TO_CODE: Record<SignalType, number> = { "host-offer": 0, "host-answer": 1 };
+const CODE_TO_TYPE: SignalType[] = ["host-offer", "host-answer"];
+const SDP_TYPE_TO_CODE: Record<string, number> = { offer: 0, answer: 1, pranswer: 2, rollback: 3 };
+const CODE_TO_SDP_TYPE = ["offer", "answer", "pranswer", "rollback"] as const;
 
-function fromBase64Url(value) {
+interface CompactPayload {
+  v: number;
+  t: number;
+  b: unknown[];
+}
+
+function fromBase64Url(value: string): string {
   const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
   const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
   return decodeURIComponent(escape(atob(padded)));
 }
 
-function bytesToBase64Url(bytes) {
+function bytesToBase64Url(bytes: Uint8Array): string {
   let binary = "";
   const chunk = 0x8000;
 
@@ -25,7 +41,7 @@ function bytesToBase64Url(bytes) {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-function base64UrlToBytes(value) {
+function base64UrlToBytes(value: string): Uint8Array {
   const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
   const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
   const binary = atob(padded);
@@ -38,7 +54,7 @@ function base64UrlToBytes(value) {
   return bytes;
 }
 
-async function compressString(text) {
+async function compressString(text: string): Promise<Uint8Array> {
   const stream = new Blob([new TextEncoder().encode(text)])
     .stream()
     .pipeThrough(new CompressionStream("deflate"));
@@ -46,35 +62,39 @@ async function compressString(text) {
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-async function decompressToString(bytes) {
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate"));
+async function decompressToString(bytes: Uint8Array): Promise<string> {
+  const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream("deflate"));
   return new TextDecoder().decode(await new Response(stream).arrayBuffer());
 }
 
-function toCompactPayload({ type, body }) {
+function toCompactPayload(payload: SignalPayload): CompactPayload {
+  const { type, body } = payload;
+
   if (type === "host-offer") {
+    const offerBody = body as HostOfferBody;
     return {
       v: SIGNAL_VERSION,
       t: TYPE_TO_CODE[type],
       b: [
-        body.hostId,
-        body.hostName,
-        SDP_TYPE_TO_CODE[body.signal.type] ?? 0,
-        body.signal.sdp,
+        offerBody.hostId,
+        offerBody.hostName,
+        SDP_TYPE_TO_CODE[offerBody.signal.type] ?? 0,
+        offerBody.signal.sdp,
       ],
     };
   }
 
   if (type === "host-answer") {
+    const answerBody = body as HostAnswerBody;
     return {
       v: SIGNAL_VERSION,
       t: TYPE_TO_CODE[type],
       b: [
-        body.targetHostId,
-        body.guestId,
-        body.guestName,
-        SDP_TYPE_TO_CODE[body.signal.type] ?? 1,
-        body.signal.sdp,
+        answerBody.targetHostId,
+        answerBody.guestId,
+        answerBody.guestName,
+        SDP_TYPE_TO_CODE[answerBody.signal.type] ?? 1,
+        answerBody.signal.sdp,
       ],
     };
   }
@@ -82,7 +102,7 @@ function toCompactPayload({ type, body }) {
   throw new Error("Unknown signal type");
 }
 
-function expandCompactPayload(compact) {
+function expandCompactPayload(compact: CompactPayload): SignalPayload {
   if (compact?.v !== SIGNAL_VERSION) {
     throw new Error("Unsupported signal payload version");
   }
@@ -98,7 +118,12 @@ function expandCompactPayload(compact) {
   }
 
   if (compact.t === 0) {
-    const [hostId, hostName, signalTypeCode, sdp] = bodyValues;
+    const [hostId, hostName, signalTypeCode, sdp] = bodyValues as [
+      string,
+      string,
+      number,
+      string,
+    ];
     return {
       version: SIGNAL_VERSION,
       type,
@@ -114,7 +139,13 @@ function expandCompactPayload(compact) {
   }
 
   if (compact.t === 1) {
-    const [targetHostId, guestId, guestName, signalTypeCode, sdp] = bodyValues;
+    const [targetHostId, guestId, guestName, signalTypeCode, sdp] = bodyValues as [
+      string,
+      string,
+      string,
+      number,
+      string,
+    ];
     return {
       version: SIGNAL_VERSION,
       type,
@@ -133,7 +164,7 @@ function expandCompactPayload(compact) {
   throw new Error("Invalid signal payload type");
 }
 
-function normalizeSignalPayloadInput(rawValue) {
+function normalizeSignalPayloadInput(rawValue: unknown): string {
   return String(rawValue ?? "")
     .trim()
     .replace(/^\uFEFF/, "")
@@ -142,15 +173,15 @@ function normalizeSignalPayloadInput(rawValue) {
     .replace(/\s+/g, "");
 }
 
-async function decodeCompactPayloadBody(encodedBody) {
+async function decodeCompactPayloadBody(encodedBody: string): Promise<SignalPayload> {
   const bytes = base64UrlToBytes(encodedBody);
   const json = await decompressToString(bytes);
-  return expandCompactPayload(JSON.parse(json));
+  return expandCompactPayload(JSON.parse(json) as CompactPayload);
 }
 
-function decodeLegacyPayload(rawValue) {
+function decodeLegacyPayload(rawValue: string): SignalPayload {
   const normalized = rawValue.trim();
-  const parsed = JSON.parse(fromBase64Url(normalized));
+  const parsed = JSON.parse(fromBase64Url(normalized)) as SignalPayload;
 
   if (parsed?.version !== 1) {
     throw new Error("Unsupported signal payload version");
@@ -163,7 +194,10 @@ function decodeLegacyPayload(rawValue) {
   return parsed;
 }
 
-export function createSignalPayload(type, body) {
+export function createSignalPayload<T extends SignalType>(
+  type: T,
+  body: T extends "host-offer" ? HostOfferBody : HostAnswerBody,
+): SignalPayload {
   return {
     version: SIGNAL_VERSION,
     type,
@@ -171,13 +205,13 @@ export function createSignalPayload(type, body) {
   };
 }
 
-export async function encodeSignalPayload(payload) {
+export async function encodeSignalPayload(payload: SignalPayload): Promise<string> {
   const compact = toCompactPayload(payload);
   const compressed = await compressString(JSON.stringify(compact));
   return `${SIGNAL_PREFIX}${bytesToBase64Url(compressed)}`;
 }
 
-export async function decodeSignalPayload(rawValue) {
+export async function decodeSignalPayload(rawValue: unknown): Promise<SignalPayload> {
   const normalized = normalizeSignalPayloadInput(rawValue);
   if (!normalized) {
     throw new Error("Пустой payload");
@@ -205,7 +239,7 @@ export async function decodeSignalPayload(rawValue) {
   }
 }
 
-export function createEnvelope(type, payload) {
+export function createEnvelope<T>(type: ProtocolType, payload: T): Envelope<T> {
   return {
     id: crypto.randomUUID(),
     type,
@@ -214,7 +248,7 @@ export function createEnvelope(type, payload) {
   };
 }
 
-export function createChatMessage(authorId, authorName, text) {
+export function createChatMessage(authorId: string, authorName: string, text: string): ChatMessage {
   return {
     id: crypto.randomUUID(),
     authorId,
@@ -224,20 +258,21 @@ export function createChatMessage(authorId, authorName, text) {
   };
 }
 
-export function trimChatHistory(messages, limit = CHAT_HISTORY_LIMIT) {
+export function trimChatHistory(messages: unknown, limit: number = CHAT_HISTORY_LIMIT): ChatMessage[] {
   if (!Array.isArray(messages)) return [];
-  if (messages.length <= limit) return messages;
-  return messages.slice(messages.length - limit);
+  if (messages.length <= limit) return messages as ChatMessage[];
+  return (messages as ChatMessage[]).slice(messages.length - limit);
 }
 
-export function isValidChatMessage(message) {
+export function isValidChatMessage(message: unknown): message is ChatMessage {
+  if (!message || typeof message !== "object") return false;
+  const candidate = message as Partial<ChatMessage>;
   return Boolean(
-    message &&
-      typeof message.id === "string" &&
-      typeof message.authorId === "string" &&
-      typeof message.authorName === "string" &&
-      typeof message.text === "string" &&
-      typeof message.timestamp === "number",
+    typeof candidate.id === "string" &&
+      typeof candidate.authorId === "string" &&
+      typeof candidate.authorName === "string" &&
+      typeof candidate.text === "string" &&
+      typeof candidate.timestamp === "number",
   );
 }
 
@@ -247,4 +282,4 @@ export const ProtocolTypes = {
   historySync: "historySync",
   peerAnnounce: "peerAnnounce",
   forwardSignal: "forwardSignal",
-};
+} as const;

@@ -1,3 +1,5 @@
+import type { PhaseMeta, PeerListItem, ResolvePhaseInput, SessionPhase } from "../types";
+
 export const PHASE = {
   SETUP: "setup",
   READY: "ready",
@@ -5,9 +7,15 @@ export const PHASE = {
   GUEST_ANSWER: "guest-answer",
   CONNECTING: "connecting",
   CHAT: "chat",
-};
+} as const satisfies Record<string, SessionPhase>;
 
-export function resolvePhase({ nickname, hostOfferCode, answerCode, peers, busy }) {
+export function resolvePhase({
+  nickname,
+  hostOfferCode,
+  answerCode,
+  peers,
+  busy,
+}: ResolvePhaseInput): SessionPhase {
   if (busy) return PHASE.CONNECTING;
   if (peers.length > 0) return PHASE.CHAT;
   if (answerCode) return PHASE.GUEST_ANSWER;
@@ -16,7 +24,7 @@ export function resolvePhase({ nickname, hostOfferCode, answerCode, peers, busy 
   return PHASE.SETUP;
 }
 
-export function getPhaseMeta(phase) {
+export function getPhaseMeta(phase: SessionPhase | string): PhaseMeta {
   switch (phase) {
     case PHASE.SETUP:
       return {
@@ -52,3 +60,5 @@ export function getPhaseMeta(phase) {
       return { title: "Подключение", hint: "" };
   }
 }
+
+export type { PeerListItem };
