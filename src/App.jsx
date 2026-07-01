@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ConnectionLog from "./components/ConnectionLog";
+import HandshakeSteps from "./components/HandshakeSteps";
 import QrPanel from "./components/QrPanel";
 import QrScanner from "./components/QrScanner";
+import { createLogEntry, trimLogEntries } from "./lib/connectionLog";
 import {
   createChatMessage,
   createSignalPayload,
@@ -8,6 +11,7 @@ import {
   encodeSignalPayload,
   trimChatHistory,
 } from "./lib/protocol";
+import { getPhaseMeta, resolvePhase } from "./lib/sessionPhase";
 import { loadState, resetSessionState, saveState } from "./lib/storage";
 import { WebRtcMesh } from "./lib/webrtc";
 
@@ -22,15 +26,38 @@ export default function App() {
   );
   const [messages, setMessages] = useState(trimChatHistory(stored.messages || [], HISTORY_LIMIT));
   const [peers, setPeers] = useState([]);
-  const [status, setStatus] = useState("offline");
   const [chatDraft, setChatDraft] = useState("");
   const [hostOfferCode, setHostOfferCode] = useState("");
   const [answerCode, setAnswerCode] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [busyLabel, setBusyLabel] = useState("");
+  const [logEntries, setLogEntries] = useState([]);
+  const [diagnostics, setDiagnostics] = useState([]);
 
   const meshRef = useRef(null);
   const messagesRef = useRef(messages);
   const messageIdsRef = useRef(new Set(messages.map((item) => item.id)));
+
+  const phase = resolvePhase({ nickname, hostOfferCode, answerCode, peers, busy });
+  const phaseMeta = getPhaseMeta(phase);
+  const isChatReady = phase === "chat";
+
+  const appendLog = useCallback((level, message) => {
+    setLogEntries((prev) => trimLogEntries([...prev, createLogEntry(level, message)]));
+  }, []);
+
+  const runBusy = useCallback(async (label, task) => {
+    setBusy(true);
+    setBusyLabel(label);
+    setError("");
+    try {
+      return await task();
+    } finally {
+      setBusy(false);
+      setBusyLabel("");
+    }
+  }, []);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -53,32 +80,15 @@ export default function App() {
   }, [messages]);
 
   useEffect(() => {
-    saveState({ peers });
-  }, [peers]);
-
-  const isChatReady = peers.length > 0;
-
-  useEffect(() => {
     if (!isChatReady) return;
     setHostOfferCode("");
     setAnswerCode("");
   }, [isChatReady]);
 
   useEffect(() => {
-    if (!answerCode || isChatReady) return undefined;
-
-    const timer = window.setTimeout(() => {
-      setError((current) =>
-        current ||
-        "Соединение ещё устанавливается. Убедитесь, что хост вставил ответный код. На телефоне не сворачивайте вкладку.",
-      );
-    }, 25000);
-
-    return () => window.clearTimeout(timer);
-  }, [answerCode, isChatReady]);
-
-  useEffect(() => {
     if (!nickname.trim()) return undefined;
+
+    appendLog("info", `Инициализация mesh для «${nickname}»`);
 
     const mesh = new WebRtcMesh({
       selfId: clientId,
@@ -89,70 +99,87 @@ export default function App() {
         messageIdsRef.current.add(nextMessage.id);
         setMessages((prev) => trimChatHistory([...prev, nextMessage], HISTORY_LIMIT));
       },
-      onStatus: (nextStatus) => setStatus(nextStatus),
-      onError: (message) => setError(message),
+      onStatus: (nextStatus) => {
+        appendLog("info", `Статус mesh: ${nextStatus}`);
+      },
+      onError: (message) => {
+        appendLog("error", message);
+        setError(message);
+      },
+      onLog: appendLog,
+      onDiagnostics: setDiagnostics,
       getHistory: () => messagesRef.current,
     });
 
     meshRef.current = mesh;
+    mesh.publishDiagnostics();
 
     return () => {
       mesh.dispose();
       meshRef.current = null;
     };
-  }, [clientId, nickname]);
+  }, [clientId, nickname, appendLog]);
 
   function saveNickname() {
     const normalized = nicknameDraft.trim();
     if (!normalized) return;
     setNickname(normalized);
     meshRef.current?.setSelfName(normalized);
+    appendLog("info", `Ник сохранён: ${normalized}`);
   }
 
   async function becomeHost() {
     if (!meshRef.current) return;
-    try {
-      setError("");
+
+    await runBusy("Создаём приглашение (сбор сетевых адресов)...", async () => {
       const offerBody = await meshRef.current.createHostOffer();
       const payload = createSignalPayload("host-offer", offerBody);
-      setHostOfferCode(await encodeSignalPayload(payload));
-      setStatus("waitingAnswer");
-    } catch {
+      const encoded = await encodeSignalPayload(payload);
+      setHostOfferCode(encoded);
+      appendLog("info", `Приглашение готово (${encoded.length} символов)`);
+    }).catch(() => {
       setError("Не удалось создать приглашение");
-    }
+      appendLog("error", "Не удалось создать приглашение");
+    });
   }
 
   const handleScannedValue = useCallback(async (value) => {
     if (!value?.trim()) return;
 
     if (!meshRef.current) {
-      setError("Сначала сохраните ник");
+      const message = "Сначала сохраните ник";
+      setError(message);
+      appendLog("warn", message);
       return;
     }
 
-    try {
-      setError("");
+    await runBusy("Обработка кода...", async () => {
+      appendLog("info", "Декодирование payload...");
       const parsed = await decodeSignalPayload(value);
+      appendLog("info", `Тип сигнала: ${parsed.type}`);
 
       if (parsed.type === "host-offer") {
         const answerBody = await meshRef.current.acceptHostOffer(parsed.body);
         const payload = createSignalPayload("host-answer", answerBody);
-        setAnswerCode(await encodeSignalPayload(payload));
-        setStatus("waitingHost");
+        const encoded = await encodeSignalPayload(payload);
+        setAnswerCode(encoded);
+        appendLog("info", `Ответ гостя готов (${encoded.length} символов). Передайте его хосту.`);
         return;
       }
 
       if (parsed.type === "host-answer") {
         await meshRef.current.completeHostHandshake(parsed.body);
+        appendLog("info", "Хост применил ответ. Ожидаем открытие чата у обоих участников.");
         return;
       }
 
-      setError("Неизвестный тип payload");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Некорректный payload";
+      throw new Error("Неизвестный тип payload");
+    }).catch((caught) => {
+      const message = caught instanceof Error ? caught.message : "Некорректный payload";
+      appendLog("error", message);
       setError(message.startsWith("Некорректный") ? message : `Ошибка: ${message}`);
-    }
-  }, []);
+    });
+  }, [appendLog, runBusy]);
 
   function sendMessage() {
     const normalized = chatDraft.trim();
@@ -162,12 +189,14 @@ export default function App() {
     messageIdsRef.current.add(message.id);
     setMessages((prev) => trimChatHistory([...prev, message], HISTORY_LIMIT));
     meshRef.current.sendChatMessage(message);
+    appendLog("info", "Сообщение отправлено в mesh");
     setChatDraft("");
   }
 
   function clearHistory() {
     setMessages([]);
     messageIdsRef.current = new Set();
+    appendLog("info", "История чата очищена локально");
   }
 
   function resetSession() {
@@ -180,72 +209,84 @@ export default function App() {
     setPeers([]);
     setHostOfferCode("");
     setAnswerCode("");
-    setStatus("offline");
     setError("");
+    setDiagnostics([]);
     messageIdsRef.current = new Set();
+    appendLog("info", "Сессия сброшена");
   }
 
-  const connectedCount = peers.length;
-  const statusLabel = isChatReady
-    ? `connected(${connectedCount})`
-    : answerCode
-      ? "waitingHost"
-      : hostOfferCode
-        ? "waitingAnswer"
-        : status;
+  const showHostActions = !isChatReady && !answerCode;
+  const showGuestScanner = !isChatReady && !hostOfferCode && !answerCode;
+  const showQrOutput = Boolean(hostOfferCode || answerCode) && !isChatReady;
 
   return (
     <main className="layout">
       <section className="card">
         <h1>P2P WebRTC Chat</h1>
-        <p className="muted">Ваш ID: {clientId}</p>
+        <p className="muted">ID: {clientId}</p>
         <label className="field">
           <span>Ник</span>
           <input
             value={nicknameDraft}
             onChange={(event) => setNicknameDraft(event.target.value)}
             placeholder="Введите ник"
-            disabled={isChatReady}
+            disabled={isChatReady || busy}
           />
         </label>
         <div className="actions">
-          <button type="button" onClick={saveNickname} disabled={!nicknameDraft.trim() || isChatReady}>
+          <button type="button" onClick={saveNickname} disabled={!nicknameDraft.trim() || isChatReady || busy}>
             Сохранить ник
           </button>
-          {!isChatReady ? (
-            <button type="button" onClick={becomeHost} disabled={!nickname}>
-              Сгенерировать приглашение
+          {showHostActions ? (
+            <button type="button" onClick={becomeHost} disabled={!nickname || busy}>
+              Создать приглашение (я хост)
             </button>
           ) : null}
-          <button type="button" onClick={resetSession}>
+          <button type="button" onClick={resetSession} disabled={busy}>
             Сбросить сессию
           </button>
         </div>
-        <p className="muted">Статус: {statusLabel}</p>
         {error ? <p className="error">{error}</p> : null}
       </section>
 
+      <HandshakeSteps
+        phase={phase}
+        title={phaseMeta.title}
+        hint={phaseMeta.hint}
+        busyLabel={busyLabel}
+      />
+
+      <ConnectionLog
+        entries={logEntries}
+        diagnostics={diagnostics}
+        onClear={() => setLogEntries([])}
+      />
+
       {!isChatReady ? (
         <div className="grid">
-          <QrPanel
-            title={
-              answerCode
-                ? "Ваш QR-ответ (отдайте хосту)"
-                : "Ваш QR (отдайте другому пользователю)"
-            }
-            value={answerCode || hostOfferCode}
-          />
-          <QrScanner onScan={handleScannedValue} />
+          {showQrOutput ? (
+            <QrPanel
+              title={
+                answerCode
+                  ? "Ваш ответ — отдайте хосту"
+                  : "Ваше приглашение — отдайте гостю"
+              }
+              value={answerCode || hostOfferCode}
+            />
+          ) : null}
+          {showGuestScanner || hostOfferCode ? (
+            <QrScanner onScan={handleScannedValue} onLog={appendLog} disabled={busy} />
+          ) : null}
         </div>
       ) : null}
 
       {isChatReady ? (
         <>
           <section className="card">
-            <h2>Подключенные пользователи</h2>
+            <h2>Участники ({peers.length})</h2>
             <ul className="peer-list">
               <li>
-                <strong>{nickname || "Без ника"}</strong> (вы)
+                <strong>{nickname}</strong> (вы)
               </li>
               {peers.map((peer) => (
                 <li key={peer.id}>{peer.name || peer.id}</li>

@@ -17,15 +17,10 @@ function isLikelyMobile() {
   return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 }
 
-function buildScanConfig(facingMode) {
+function buildScanConfig() {
   return {
-    fps: 15,
+    fps: 10,
     disableFlip: false,
-    videoConstraints: {
-      facingMode: { ideal: facingMode },
-      width: { min: 640, ideal: 1280 },
-      height: { min: 480, ideal: 720 },
-    },
   };
 }
 
@@ -48,7 +43,7 @@ async function stopScanner(scanner) {
   }
 }
 
-async function startWithFallback(scanner, onSuccess) {
+async function startWithFallback(scanner, onSuccess, onLog) {
   const facingModes = isLikelyMobile()
     ? ["environment", "user"]
     : ["user", "environment"];
@@ -57,12 +52,14 @@ async function startWithFallback(scanner, onSuccess) {
 
   for (const facingMode of facingModes) {
     try {
+      onLog?.("info", `Камера: пробуем ${facingMode}`);
       await scanner.start(
         { facingMode },
-        buildScanConfig(facingMode),
+        buildScanConfig(),
         onSuccess,
         () => {},
       );
+      onLog?.("info", "Камера запущена");
       return;
     } catch (error) {
       lastError = error;
@@ -76,17 +73,11 @@ async function startWithFallback(scanner, onSuccess) {
       : cameras.find((camera) => /front|user|facetime|integrated/i.test(camera.label));
 
     const cameraId = (preferred || cameras[0]).id;
+    onLog?.("info", `Камера: используем устройство ${cameraId}`);
 
     try {
-      await scanner.start(
-        cameraId,
-        {
-          fps: 15,
-          disableFlip: false,
-        },
-        onSuccess,
-        () => {},
-      );
+      await scanner.start(cameraId, buildScanConfig(), onSuccess, () => {});
+      onLog?.("info", "Камера запущена");
       return;
     } catch (error) {
       lastError = error;
@@ -96,13 +87,14 @@ async function startWithFallback(scanner, onSuccess) {
   throw lastError || new Error("Не удалось открыть камеру");
 }
 
-export default function QrScanner({ onScan }) {
+export default function QrScanner({ onScan, onLog, disabled = false }) {
   const [manualValue, setManualValue] = useState("");
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [error, setError] = useState("");
   const [fileBusy, setFileBusy] = useState(false);
   const scannerRef = useRef(null);
   const onScanRef = useRef(onScan);
+  const onLogRef = useRef(onLog);
   const fileInputRef = useRef(null);
   const regionId = useId().replace(/:/g, "");
 
@@ -111,7 +103,11 @@ export default function QrScanner({ onScan }) {
   }, [onScan]);
 
   useEffect(() => {
-    if (!cameraEnabled) return undefined;
+    onLogRef.current = onLog;
+  }, [onLog]);
+
+  useEffect(() => {
+    if (!cameraEnabled || disabled) return undefined;
 
     if (!window.isSecureContext) {
       setError("Камера работает только по HTTPS или на localhost");
@@ -131,17 +127,19 @@ export default function QrScanner({ onScan }) {
 
         await startWithFallback(scanner, (decodedText) => {
           if (disposed) return;
+          onLogRef.current?.("info", "QR распознан камерой");
           onScanRef.current(decodedText);
           setManualValue(decodedText);
           setCameraEnabled(false);
-        });
+        }, onLogRef.current);
 
         if (disposed) {
           await stopScanner(scanner);
         }
       } catch {
         if (!disposed) {
-          setError("Не удалось запустить камеру. Разрешите доступ к камере в браузере.");
+          setError("Не удалось запустить камеру");
+          onLogRef.current?.("error", "Не удалось запустить камеру");
           setCameraEnabled(false);
         } else if (scanner) {
           await stopScanner(scanner);
@@ -160,47 +158,72 @@ export default function QrScanner({ onScan }) {
         }
       });
     };
-  }, [cameraEnabled, regionId]);
+  }, [cameraEnabled, disabled, regionId]);
 
   async function handleImageFile(event) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file || cameraEnabled) return;
+    if (!file || cameraEnabled || disabled) return;
 
     setFileBusy(true);
     setError("");
+    onLogRef.current?.("info", "Сканирование QR из файла...");
 
     const scanner = new Html5Qrcode(regionId, SCANNER_CREATE_CONFIG);
 
     try {
       const decodedText = await scanner.scanFile(file, true);
       setManualValue(decodedText);
+      onLogRef.current?.("info", "QR распознан из файла");
       onScanRef.current(decodedText);
     } catch {
-      setError("QR на изображении не найден. Попробуйте скриншот крупнее и без бликов.");
+      setError("QR на изображении не найден");
+      onLogRef.current?.("warn", "QR на изображении не найден");
     } finally {
       await stopScanner(scanner);
       setFileBusy(false);
     }
   }
 
+  function applyManual() {
+    if (!manualValue.trim() || disabled) return;
+    onLogRef.current?.("info", "Применение payload из поля ввода");
+    onScan(manualValue);
+  }
+
   return (
     <section className="card">
-      <h3>Сканировать QR</h3>
+      <h3>Принять код</h3>
       <p className="muted scanner-hint">
-        QR с экрана компьютера лучше читать крупным планом, без бликов. На ПК удобнее загрузить
-        скриншот.
+        Быстрее всего — вставить текст из «Payload». Камера подходит для коротких QR.
       </p>
+      <label className="field">
+        <span>Вставьте payload</span>
+        <textarea
+          value={manualValue}
+          onChange={(event) => setManualValue(event.target.value)}
+          rows={4}
+          placeholder="rps://..."
+          disabled={disabled || fileBusy}
+        />
+      </label>
       <div className="actions">
-        <button type="button" onClick={() => setCameraEnabled((prev) => !prev)} disabled={fileBusy}>
-          {cameraEnabled ? "Остановить камеру" : "Запустить камеру"}
+        <button type="button" onClick={applyManual} disabled={!manualValue.trim() || disabled || fileBusy}>
+          Применить payload
         </button>
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          disabled={cameraEnabled || fileBusy}
+          disabled={cameraEnabled || fileBusy || disabled}
         >
-          {fileBusy ? "Читаю файл..." : "Загрузить изображение"}
+          {fileBusy ? "Читаю файл..." : "Загрузить фото QR"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setCameraEnabled((prev) => !prev)}
+          disabled={fileBusy || disabled}
+        >
+          {cameraEnabled ? "Остановить камеру" : "Сканировать камерой"}
         </button>
         <input
           ref={fileInputRef}
@@ -212,21 +235,6 @@ export default function QrScanner({ onScan }) {
       </div>
       <div id={regionId} className="scanner" />
       {error ? <p className="error">{error}</p> : null}
-
-      <label className="field">
-        <span>Или вставьте payload вручную</span>
-        <textarea
-          value={manualValue}
-          onChange={(event) => setManualValue(event.target.value)}
-          rows={4}
-          placeholder="rps://..."
-        />
-      </label>
-      <div className="actions">
-        <button type="button" onClick={() => onScan(manualValue)} disabled={!manualValue.trim()}>
-          Применить payload
-        </button>
-      </div>
     </section>
   );
 }
