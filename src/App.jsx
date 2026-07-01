@@ -167,6 +167,7 @@ export default function App() {
   }
 
   const connectedCount = peers.length;
+  const isConnected = status === "connected";
 
   return (
     <main className="layout">
@@ -179,73 +180,82 @@ export default function App() {
             value={nicknameDraft}
             onChange={(event) => setNicknameDraft(event.target.value)}
             placeholder="Введите ник"
+            disabled={isConnected}
           />
         </label>
         <div className="actions">
-          <button type="button" onClick={saveNickname} disabled={!nicknameDraft.trim()}>
+          <button type="button" onClick={saveNickname} disabled={!nicknameDraft.trim() || isConnected}>
             Сохранить ник
           </button>
-          <button type="button" onClick={becomeHost} disabled={!nickname}>
-            Сгенерировать приглашение
-          </button>
-        </div>
-        <p className="muted">Статус: {status === "connected" ? `connected(${connectedCount})` : status}</p>
-        {error ? <p className="error">{error}</p> : null}
-      </section>
-
-      <section className="card">
-        <h2>Подключенные пользователи</h2>
-        <ul className="peer-list">
-          <li>
-            <strong>{nickname || "Без ника"}</strong> (вы)
-          </li>
-          {peers.map((peer) => (
-            <li key={peer.id}>{peer.name || peer.id}</li>
-          ))}
-        </ul>
-      </section>
-
-      <div className="grid">
-        <QrPanel title="Ваш QR (отдайте другому пользователю)" value={hostOfferCode || answerCode} />
-        <QrScanner onScan={handleScannedValue} />
-      </div>
-
-      <section className="card chat">
-        <h2>Чат</h2>
-        <div className="chat-log">
-          {messages.map((message) => (
-            <article
-              key={message.id}
-              className={message.authorId === clientId ? "chat-item own" : "chat-item"}
-            >
-              <header>
-                <strong>{message.authorName}</strong>
-              </header>
-              <p>{message.text}</p>
-            </article>
-          ))}
-        </div>
-        <label className="field">
-          <span>Сообщение</span>
-          <textarea
-            value={chatDraft}
-            onChange={(event) => setChatDraft(event.target.value)}
-            rows={3}
-            placeholder="Введите сообщение"
-          />
-        </label>
-        <div className="actions">
-          <button type="button" onClick={sendMessage} disabled={!nickname || !chatDraft.trim()}>
-            Отправить
-          </button>
-          <button type="button" onClick={clearHistory}>
-            Очистить историю
-          </button>
+          {!isConnected ? (
+            <button type="button" onClick={becomeHost} disabled={!nickname}>
+              Сгенерировать приглашение
+            </button>
+          ) : null}
           <button type="button" onClick={resetSession}>
             Сбросить сессию
           </button>
         </div>
+        <p className="muted">Статус: {isConnected ? `connected(${connectedCount})` : status}</p>
+        {error ? <p className="error">{error}</p> : null}
       </section>
+
+      {!isConnected ? (
+        <div className="grid">
+          <QrPanel title="Ваш QR (отдайте другому пользователю)" value={hostOfferCode || answerCode} />
+          <QrScanner onScan={handleScannedValue} />
+        </div>
+      ) : null}
+
+      {isConnected ? (
+        <>
+          <section className="card">
+            <h2>Подключенные пользователи</h2>
+            <ul className="peer-list">
+              <li>
+                <strong>{nickname || "Без ника"}</strong> (вы)
+              </li>
+              {peers.map((peer) => (
+                <li key={peer.id}>{peer.name || peer.id}</li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="card chat">
+            <h2>Чат</h2>
+            <div className="chat-log">
+              {messages.map((message) => (
+                <article
+                  key={message.id}
+                  className={message.authorId === clientId ? "chat-item own" : "chat-item"}
+                >
+                  <header>
+                    <strong>{message.authorName}</strong>
+                  </header>
+                  <p>{message.text}</p>
+                </article>
+              ))}
+            </div>
+            <label className="field">
+              <span>Сообщение</span>
+              <textarea
+                value={chatDraft}
+                onChange={(event) => setChatDraft(event.target.value)}
+                rows={3}
+                placeholder="Введите сообщение"
+              />
+            </label>
+            <div className="actions">
+              <button type="button" onClick={sendMessage} disabled={!nickname || !chatDraft.trim()}>
+                Отправить
+              </button>
+              <button type="button" onClick={clearHistory}>
+                Очистить историю
+              </button>
+            </div>
+          </section>
+        </>
+      ) : null}
     </main>
   );
 }

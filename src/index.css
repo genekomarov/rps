@@ -61,6 +61,12 @@ p {
   resize: vertical;
 }
 
+.field input:disabled,
+.field textarea:disabled {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
 .actions {
   display: flex;
   gap: 0.5rem;
