@@ -1,8 +1,28 @@
-const HANDSHAKE_ICE_LIMITS = { host: 4, srflx: 10, relay: 12 };
+const HANDSHAKE_ICE_LIMITS = { host: 8, srflx: 16, relay: Infinity };
 const SKIP_LINE_PREFIXES = ["a=extmap:", "a=msid:", "a=ssrc:", "a=rtcp-fb:"];
 
 function splitSdpLines(sdp) {
   return sdp.split(/\r?\n/).map((line) => line.replace(/\r/g, ""));
+}
+
+export function countIceCandidatesInSdp(sdp) {
+  const counts = { host: 0, srflx: 0, relay: 0, total: 0 };
+  if (!sdp) return counts;
+
+  for (const line of splitSdpLines(sdp)) {
+    if (!line.startsWith("a=candidate:")) continue;
+    counts.total += 1;
+    const typ = line.match(/ typ ([a-z]+)/)?.[1] || "host";
+    if (typ in counts) counts[typ] += 1;
+    else counts.host += 1;
+  }
+
+  return counts;
+}
+
+export function formatIceCandidateCounts(counts) {
+  if (!counts) return "кандидатов нет";
+  return `host=${counts.host}, srflx=${counts.srflx}, relay=${counts.relay}`;
 }
 
 export function normalizeSdp(sdp) {
@@ -33,7 +53,7 @@ export function trimSdp(sdp) {
 
     const typ = line.match(/ typ ([a-z]+)/)?.[1] || "host";
     const limit = HANDSHAKE_ICE_LIMITS[typ] ?? HANDSHAKE_ICE_LIMITS.host;
-    if (iceCounts[typ] >= limit) {
+    if (Number.isFinite(limit) && iceCounts[typ] >= limit) {
       return false;
     }
 

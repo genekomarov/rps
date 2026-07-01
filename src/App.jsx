@@ -108,6 +108,15 @@ export default function App() {
       },
       onLog: appendLog,
       onDiagnostics: setDiagnostics,
+      onHandshakeAnswerRefresh: async (answerBody) => {
+        const payload = createSignalPayload("host-answer", answerBody);
+        const encoded = await encodeSignalPayload(payload);
+        setAnswerCode(encoded);
+        appendLog(
+          "warn",
+          `Ответ обновлён (ICE restart, ${encoded.length} символов). Передайте новый код хосту.`,
+        );
+      },
       getHistory: () => messagesRef.current,
     });
 
