@@ -167,7 +167,13 @@ export default function App() {
   }
 
   const connectedCount = peers.length;
-  const isConnected = status === "connected";
+  const hasPendingHandshake = Boolean(hostOfferCode || answerCode);
+  const isChatReady = status === "connected" && !hasPendingHandshake;
+  const statusLabel = isChatReady
+    ? `connected(${connectedCount})`
+    : answerCode
+      ? "waitingHost"
+      : status;
 
   return (
     <main className="layout">
@@ -180,14 +186,14 @@ export default function App() {
             value={nicknameDraft}
             onChange={(event) => setNicknameDraft(event.target.value)}
             placeholder="Введите ник"
-            disabled={isConnected}
+            disabled={isChatReady}
           />
         </label>
         <div className="actions">
-          <button type="button" onClick={saveNickname} disabled={!nicknameDraft.trim() || isConnected}>
+          <button type="button" onClick={saveNickname} disabled={!nicknameDraft.trim() || isChatReady}>
             Сохранить ник
           </button>
-          {!isConnected ? (
+          {!isChatReady ? (
             <button type="button" onClick={becomeHost} disabled={!nickname}>
               Сгенерировать приглашение
             </button>
@@ -196,18 +202,25 @@ export default function App() {
             Сбросить сессию
           </button>
         </div>
-        <p className="muted">Статус: {isConnected ? `connected(${connectedCount})` : status}</p>
+        <p className="muted">Статус: {statusLabel}</p>
         {error ? <p className="error">{error}</p> : null}
       </section>
 
-      {!isConnected ? (
+      {!isChatReady ? (
         <div className="grid">
-          <QrPanel title="Ваш QR (отдайте другому пользователю)" value={hostOfferCode || answerCode} />
+          <QrPanel
+            title={
+              answerCode
+                ? "Ваш QR-ответ (отдайте хосту)"
+                : "Ваш QR (отдайте другому пользователю)"
+            }
+            value={hostOfferCode || answerCode}
+          />
           <QrScanner onScan={handleScannedValue} />
         </div>
       ) : null}
 
-      {isConnected ? (
+      {isChatReady ? (
         <>
           <section className="card">
             <h2>Подключенные пользователи</h2>
