@@ -25,38 +25,58 @@ const RTC_CONFIG = {
 };
 
 const DATA_CHANNEL_LABEL = "chat";
-const DATA_CHANNEL_TIMEOUT_MS = 30000;
-const ICE_GATHER_TIMEOUT_MS = 8000;
+const ICE_GATHER_LOG_INTERVAL_MS = 8000;
+const DATA_CHANNEL_LOG_INTERVAL_MS = 30000;
 
-async function waitForIceGatheringComplete(pc, log, timeoutMs = ICE_GATHER_TIMEOUT_MS) {
+async function waitForIceGatheringComplete(pc, log, isAborted) {
   if (pc.iceGatheringState === "complete") {
     log("info", "ICE: сбор кандидатов завершён");
     return;
   }
 
-  log("info", "ICE: сбор сетевых кандидатов...");
+  log("info", "ICE: сбор сетевых кандидатов (без ограничения по времени)...");
 
-  await new Promise((resolve) => {
-    let done = false;
+  await new Promise((resolve, reject) => {
+    let attempt = 0;
 
-    const timer = setTimeout(() => {
-      if (done) return;
-      done = true;
+    const logTimer = setInterval(() => {
+      if (isAborted?.()) {
+        cleanup();
+        reject(new Error("Сессия сброшена"));
+        return;
+      }
+      attempt += 1;
+      log(
+        "info",
+        `ICE: сбор кандидатов, попытка ${attempt}, состояние: ${pc.iceGatheringState}`,
+      );
+    }, ICE_GATHER_LOG_INTERVAL_MS);
+
+    function cleanup() {
+      clearInterval(logTimer);
       pc.removeEventListener("icegatheringstatechange", onChange);
-      log("warn", `ICE: таймаут ${timeoutMs} мс — используем уже собранные кандидаты`);
-      resolve();
-    }, timeoutMs);
+      pc.removeEventListener("connectionstatechange", onClosed);
+    }
 
     function onChange() {
-      if (pc.iceGatheringState !== "complete" || done) return;
-      done = true;
-      clearTimeout(timer);
-      pc.removeEventListener("icegatheringstatechange", onChange);
+      if (pc.iceGatheringState !== "complete") return;
+      cleanup();
       log("info", "ICE: сбор кандидатов завершён");
       resolve();
     }
 
+    function onClosed() {
+      if (pc.connectionState !== "closed") return;
+      cleanup();
+      reject(new Error("Сессия сброшена"));
+    }
+
     pc.addEventListener("icegatheringstatechange", onChange);
+    pc.addEventListener("connectionstatechange", onClosed);
+
+    if (pc.iceGatheringState === "complete") {
+      onChange();
+    }
   });
 }
 
@@ -165,7 +185,7 @@ export class WebRtcMesh {
     const offer = await peer.pc.createOffer();
     await peer.pc.setLocalDescription(offer);
     this.log("info", "Хост: local offer установлен");
-    await waitForIceGatheringComplete(peer.pc, this.log.bind(this));
+    await waitForIceGatheringComplete(peer.pc, this.log.bind(this), () => this.closed);
     this.publishDiagnostics();
 
     return {
@@ -190,7 +210,7 @@ export class WebRtcMesh {
     const answer = await peer.pc.createAnswer();
     await peer.pc.setLocalDescription(answer);
     this.log("info", "Гость: local answer установлен");
-    await waitForIceGatheringComplete(peer.pc, this.log.bind(this));
+    await waitForIceGatheringComplete(peer.pc, this.log.bind(this), () => this.closed);
     this.publishDiagnostics();
 
     return {
@@ -236,7 +256,7 @@ export class WebRtcMesh {
     const peer = this.ensurePeer(peerId, true, peerName || peerId);
     const offer = await peer.pc.createOffer();
     await peer.pc.setLocalDescription(offer);
-    await waitForIceGatheringComplete(peer.pc, this.log.bind(this));
+    await waitForIceGatheringComplete(peer.pc, this.log.bind(this), () => this.closed);
 
     this.broadcastEnvelope(
       createEnvelope(ProtocolTypes.forwardSignal, {
@@ -252,18 +272,20 @@ export class WebRtcMesh {
     this.broadcastEnvelope(createEnvelope(ProtocolTypes.chatMessage, message), null);
   }
 
-  waitForDataChannel(peer, timeoutMs = DATA_CHANNEL_TIMEOUT_MS) {
+  waitForDataChannel(peer) {
     if (this.syncPeerReady(peer)) {
       return Promise.resolve();
     }
 
     return new Promise((resolve, reject) => {
       let done = false;
+      let attempt = 0;
+      let logTimer;
 
       const finish = (error) => {
         if (done) return;
         done = true;
-        clearTimeout(timer);
+        clearInterval(logTimer);
         peer.pc.removeEventListener("connectionstatechange", onConnectionChange);
         peer.pc.removeEventListener("iceconnectionstatechange", onConnectionChange);
         peer.pc.removeEventListener("datachannel", onDataChannel);
@@ -275,6 +297,23 @@ export class WebRtcMesh {
         else resolve();
       };
 
+      logTimer = setInterval(() => {
+        if (this.closed) {
+          finish(new Error("Сессия сброшена"));
+          return;
+        }
+        attempt += 1;
+        this.log(
+          "info",
+          `Ожидание канала (${peer.peerName || peer.peerId}), попытка ${attempt}: ICE=${peer.pc.iceConnectionState}, PC=${peer.pc.connectionState}, DC=${peer.dc?.readyState ?? "none"}`,
+        );
+        this.publishDiagnostics();
+        this.syncPeerReady(peer);
+        if (this.isPeerReady(peer)) {
+          finish();
+        }
+      }, DATA_CHANNEL_LOG_INTERVAL_MS);
+
       const onChannelOpen = () => {
         this.log("info", `Канал данных открыт (${peer.peerName || peer.peerId})`);
         this.syncPeerReady(peer);
@@ -284,6 +323,19 @@ export class WebRtcMesh {
       const onConnectionChange = () => {
         this.publishDiagnostics();
 
+        if (peer.pc.connectionState === "closed" || this.closed) {
+          finish(new Error("Сессия сброшена"));
+          return;
+        }
+
+        if (peer.pc.iceConnectionState === "failed" || peer.pc.connectionState === "failed") {
+          this.log(
+            "warn",
+            `Соединение failed (${peer.peerName || peer.peerId}), продолжаем ожидание — или сбросьте сессию`,
+          );
+          return;
+        }
+
         if (peer.pc.iceConnectionState === "connected" || peer.pc.iceConnectionState === "completed") {
           this.log("info", `ICE подключён (${peer.peerName || peer.peerId})`);
           this.syncPeerReady(peer);
@@ -291,11 +343,6 @@ export class WebRtcMesh {
             finish();
             return;
           }
-        }
-
-        if (peer.pc.connectionState === "failed" || peer.pc.connectionState === "closed") {
-          finish(new Error("WebRTC: соединение не установлено"));
-          return;
         }
 
         this.syncPeerReady(peer);
@@ -312,10 +359,6 @@ export class WebRtcMesh {
           peer.dc?.addEventListener("open", onChannelOpen, { once: true });
         }
       };
-
-      const timer = setTimeout(() => {
-        finish(new Error("Таймаут канала данных. Проверьте интернет и попробуйте снова."));
-      }, timeoutMs);
 
       if (peer.dc) {
         peer.dc.addEventListener("open", onChannelOpen, { once: true });
@@ -346,10 +389,11 @@ export class WebRtcMesh {
     peer.pc.addEventListener("iceconnectionstatechange", () => {
       const state = peer.pc.iceConnectionState;
       if (state === "failed") {
-        this.log("error", `ICE failed (${peer.peerName || peer.peerId})`);
-        this.onError("P2P-соединение не установлено. Начните подключение заново.");
-        this.peerMap.delete(peer.peerId);
-        this.notifyPeers();
+        this.log(
+          "warn",
+          `ICE failed (${peer.peerName || peer.peerId}), ожидаем — или нажмите «Сбросить сессию»`,
+        );
+        logState("ICE change:");
         return;
       }
       if (state === "connected" || state === "completed") {
@@ -363,13 +407,21 @@ export class WebRtcMesh {
     });
 
     peer.pc.addEventListener("connectionstatechange", () => {
-      if (peer.pc.connectionState === "failed" || peer.pc.connectionState === "closed") {
-        this.log("warn", `PC ${peer.pc.connectionState} (${peer.peerName || peer.peerId})`);
+      if (peer.pc.connectionState === "closed" || this.closed) {
+        this.log("info", `PC closed (${peer.peerName || peer.peerId})`);
         this.peerMap.delete(peer.peerId);
         if (this.pendingInvitePeerId === peer.peerId) {
           this.pendingInvitePeerId = null;
         }
         this.notifyPeers();
+        return;
+      }
+      if (peer.pc.connectionState === "failed") {
+        this.log(
+          "warn",
+          `PC failed (${peer.peerName || peer.peerId}), ожидаем — или нажмите «Сбросить сессию»`,
+        );
+        logState("PC change:");
         return;
       }
       if (peer.pc.connectionState === "connected") {
@@ -535,7 +587,7 @@ export class WebRtcMesh {
       if (isOffer) {
         const answer = await peer.pc.createAnswer();
         await peer.pc.setLocalDescription(answer);
-        await waitForIceGatheringComplete(peer.pc, this.log.bind(this));
+        await waitForIceGatheringComplete(peer.pc, this.log.bind(this), () => this.closed);
 
         this.broadcastEnvelope(
           createEnvelope(ProtocolTypes.forwardSignal, {

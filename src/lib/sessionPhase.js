@@ -41,7 +41,7 @@ export function getPhaseMeta(phase) {
     case PHASE.CONNECTING:
       return {
         title: "Шаг 4. Устанавливаем соединение",
-        hint: "Идёт обмен сетевыми данными WebRTC. Это может занять до 30 секунд.",
+        hint: "Идёт обмен сетевыми данными WebRTC. Ожидание без ограничения по времени. При проблемах — «Сбросить сессию».",
       };
     case PHASE.CHAT:
       return {
