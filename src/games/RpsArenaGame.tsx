@@ -83,7 +83,6 @@ export default function RpsArenaGame() {
     return statusMessage(state, clientId, isMyTurn);
   })();
 
-  const myPieces = state?.pieces.filter((piece) => piece.ownerId === clientId) ?? [];
   const canEditSetup = Boolean(state?.phase === "setup" && !state.setupReady[clientId]);
   const shouldFlipBoard = Boolean(state && !isBottomPlayer(clientId, state));
 
@@ -103,6 +102,11 @@ export default function RpsArenaGame() {
 
     const piece = state.pieces.find((item) => item.row === row && item.col === col);
     const isLegalTarget = legalMoves.some((move) => move.row === row && move.col === col);
+
+    if (canEditSetup && piece?.ownerId === clientId) {
+      cycleSpecial(piece.id);
+      return;
+    }
 
     if (state.phase === "playing" && selectedPieceId && isLegalTarget) {
       moveSelectedPiece(row, col);
@@ -208,18 +212,9 @@ export default function RpsArenaGame() {
             <section className="card arena-setup">
               <h2>Расстановка</h2>
               <p className="muted">
-                Кликните по своей фигуре, чтобы назначить знамя или ловушку. Нужно ровно по одному
-                знамени и одной ловушке. Свои солдаты показывают оружие.
+                Кликайте по своим картам прямо на поле, чтобы переключать: солдат → знамя →
+                ловушка → солдат. Нужно выставить ровно по одному знамени и ловушке.
               </p>
-              <ul className="arena-setup-list">
-                {myPieces.map((piece) => (
-                  <li key={piece.id}>
-                    <button type="button" className="button-secondary" onClick={() => cycleSpecial(piece.id)}>
-                      {renderPiece(piece, true)} · {piece.kind === "flag" ? "Знамя" : piece.kind === "trap" ? "Ловушка" : piece.weapon ? weaponLabel(piece.weapon) : "Солдат"} · ({piece.row},{piece.col})
-                    </button>
-                  </li>
-                ))}
-              </ul>
               <div className="actions">
                 <button type="button" onClick={readySetup}>
                   Готов
