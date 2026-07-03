@@ -53,8 +53,8 @@ export function getPhaseMeta(phase: SessionPhase | string): PhaseMeta {
       };
     case PHASE.CHAT:
       return {
-        title: "Чат открыт",
-        hint: "Соединение установлено. Можно отправлять сообщения.",
+        title: "Соединение установлено",
+        hint: "P2P-канал открыт. Перейдите на главную, чтобы выбрать игру.",
       };
     default:
       return { title: "Подключение", hint: "" };

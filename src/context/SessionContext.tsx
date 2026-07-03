@@ -1,0 +1,373 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { createLogEntry, trimLogEntries } from "../lib/connectionLog";
+import {
+  createChatMessage,
+  createSignalPayload,
+  decodeSignalPayload,
+  encodeSignalPayload,
+  trimChatHistory,
+} from "../lib/protocol";
+import { getPhaseMeta, resolvePhase } from "../lib/sessionPhase";
+import { loadState, resetSessionState, saveState } from "../lib/storage";
+import { WebRtcMesh } from "../lib/webrtc";
+import type {
+  ChatMessage,
+  HostAnswerBody,
+  HostOfferBody,
+  LogEntry,
+  LogLevel,
+  PeerDiagnostic,
+  PeerListItem,
+  PhaseMeta,
+  SessionPhase,
+} from "../types";
+
+const HISTORY_LIMIT = 100;
+
+export interface SessionContextValue {
+  clientId: string;
+  nickname: string;
+  nicknameDraft: string;
+  setNicknameDraft: (value: string) => void;
+  messages: ChatMessage[];
+  peers: PeerListItem[];
+  chatDraft: string;
+  setChatDraft: (value: string) => void;
+  hostOfferCode: string;
+  answerCode: string;
+  error: string;
+  busy: boolean;
+  busyLabel: string;
+  logEntries: LogEntry[];
+  diagnostics: PeerDiagnostic[];
+  extendedRelayGather: boolean;
+  setExtendedRelayGather: (value: boolean) => void;
+  phase: SessionPhase;
+  phaseMeta: PhaseMeta;
+  isConnected: boolean;
+  saveNickname: () => void;
+  becomeHost: () => Promise<void>;
+  handleScannedValue: (value: string) => Promise<void>;
+  sendMessage: () => void;
+  clearHistory: () => void;
+  resetSession: () => void;
+  clearLog: () => void;
+  appendLog: (level: LogLevel, message: string) => void;
+}
+
+const SessionContext = createContext<SessionContextValue | null>(null);
+
+export function useSession(): SessionContextValue {
+  const value = useContext(SessionContext);
+  if (!value) {
+    throw new Error("useSession must be used within SessionProvider");
+  }
+  return value;
+}
+
+export function SessionProvider({ children }: { children: ReactNode }) {
+  const stored = useMemo(() => loadState(), []);
+  const [clientId, setClientId] = useState(stored.clientId || crypto.randomUUID());
+  const [nickname, setNickname] = useState(stored.nickname || "");
+  const [nicknameDraft, setNicknameDraft] = useState(
+    stored.nicknameDraft || stored.nickname || "",
+  );
+  const [messages, setMessages] = useState<ChatMessage[]>(
+    trimChatHistory(stored.messages || [], HISTORY_LIMIT),
+  );
+  const [peers, setPeers] = useState<PeerListItem[]>([]);
+  const [chatDraft, setChatDraft] = useState("");
+  const [hostOfferCode, setHostOfferCode] = useState("");
+  const [answerCode, setAnswerCode] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [busyLabel, setBusyLabel] = useState("");
+  const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
+  const [diagnostics, setDiagnostics] = useState<PeerDiagnostic[]>([]);
+  const [extendedRelayGather, setExtendedRelayGather] = useState(
+    Boolean(stored.extendedRelayGather),
+  );
+
+  const meshRef = useRef<WebRtcMesh | null>(null);
+  const resettingRef = useRef(false);
+  const messagesRef = useRef(messages);
+  const messageIdsRef = useRef(new Set(messages.map((item) => item.id)));
+
+  const phase = resolvePhase({ nickname, hostOfferCode, answerCode, peers, busy });
+  const phaseMeta = getPhaseMeta(phase);
+  const isConnected = phase === "chat";
+
+  const appendLog = useCallback((level: LogLevel, message: string) => {
+    setLogEntries((prev) => trimLogEntries([...prev, createLogEntry(level, message)]));
+  }, []);
+
+  const runBusy = useCallback(async <T,>(label: string, task: () => Promise<T>) => {
+    setBusy(true);
+    setBusyLabel(label);
+    setError("");
+    try {
+      return await task();
+    } finally {
+      setBusy(false);
+      setBusyLabel("");
+    }
+  }, []);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    saveState({ clientId });
+  }, [clientId]);
+
+  useEffect(() => {
+    saveState({ nickname });
+  }, [nickname]);
+
+  useEffect(() => {
+    saveState({ nicknameDraft });
+  }, [nicknameDraft]);
+
+  useEffect(() => {
+    saveState({ messages: trimChatHistory(messages, HISTORY_LIMIT) });
+  }, [messages]);
+
+  useEffect(() => {
+    saveState({ extendedRelayGather });
+  }, [extendedRelayGather]);
+
+  useEffect(() => {
+    if (!isConnected) return;
+    setHostOfferCode("");
+    setAnswerCode("");
+  }, [isConnected]);
+
+  useEffect(() => {
+    if (!nickname.trim()) return undefined;
+
+    appendLog("info", `Инициализация mesh для «${nickname}»`);
+
+    const mesh = new WebRtcMesh({
+      selfId: clientId,
+      selfName: nickname,
+      extendedRelayGather,
+      onPeerListChange: setPeers,
+      onMessage: (nextMessage) => {
+        if (messageIdsRef.current.has(nextMessage.id)) return;
+        messageIdsRef.current.add(nextMessage.id);
+        setMessages((prev) => trimChatHistory([...prev, nextMessage], HISTORY_LIMIT));
+      },
+      onStatus: (nextStatus) => {
+        appendLog("info", `Статус mesh: ${nextStatus}`);
+      },
+      onError: (message) => {
+        appendLog("error", message);
+        setError(message);
+      },
+      onLog: appendLog,
+      onDiagnostics: setDiagnostics,
+      onHandshakeOfferRefresh: async (offerBody) => {
+        const payload = createSignalPayload("host-offer", offerBody);
+        const encoded = await encodeSignalPayload(payload);
+        setHostOfferCode(encoded);
+        appendLog(
+          "warn",
+          `Приглашение обновлено (ICE restart, ${encoded.length} символов). Передайте новый код гостю.`,
+        );
+      },
+      getHistory: () => messagesRef.current,
+    });
+
+    meshRef.current = mesh;
+    mesh.publishDiagnostics();
+
+    return () => {
+      mesh.dispose();
+      meshRef.current = null;
+    };
+  }, [clientId, nickname, appendLog, extendedRelayGather]);
+
+  const saveNickname = useCallback(() => {
+    const normalized = nicknameDraft.trim();
+    if (!normalized) return;
+    setNickname(normalized);
+    meshRef.current?.setSelfName(normalized);
+    appendLog("info", `Ник сохранён: ${normalized}`);
+  }, [nicknameDraft, appendLog]);
+
+  const becomeHost = useCallback(async () => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+
+    await runBusy("Создаём приглашение (сбор сетевых адресов)...", async () => {
+      const offerBody = await mesh.createHostOffer();
+      const payload = createSignalPayload("host-offer", offerBody);
+      const encoded = await encodeSignalPayload(payload);
+      setHostOfferCode(encoded);
+      appendLog("info", `Приглашение готово (${encoded.length} символов)`);
+    }).catch(() => {
+      setError("Не удалось создать приглашение");
+      appendLog("error", "Не удалось создать приглашение");
+    });
+  }, [appendLog, runBusy]);
+
+  const handleScannedValue = useCallback(
+    async (value: string) => {
+      if (!value?.trim()) return;
+
+      const mesh = meshRef.current;
+      if (!mesh) {
+        const message = "Сначала сохраните ник";
+        setError(message);
+        appendLog("warn", message);
+        return;
+      }
+
+      await runBusy("Обработка кода...", async () => {
+        appendLog("info", "Декодирование payload...");
+        const parsed = await decodeSignalPayload(value);
+        appendLog("info", `Тип сигнала: ${parsed.type}`);
+
+        if (parsed.type === "host-offer") {
+          const answerBody = await mesh.acceptHostOffer(parsed.body as HostOfferBody);
+          const payload = createSignalPayload("host-answer", answerBody);
+          const encoded = await encodeSignalPayload(payload);
+          setAnswerCode(encoded);
+          appendLog("info", `Ответ гостя готов (${encoded.length} символов). Передайте его хосту.`);
+          return;
+        }
+
+        if (parsed.type === "host-answer") {
+          await mesh.completeHostHandshake(parsed.body as HostAnswerBody);
+          appendLog("info", "Хост применил ответ. Ожидаем открытие соединения у обоих участников.");
+          return;
+        }
+
+        throw new Error("Неизвестный тип payload");
+      }).catch((caught) => {
+        const message = caught instanceof Error ? caught.message : "Некорректный payload";
+        appendLog("error", message);
+        setError(message.startsWith("Некорректный") ? message : `Ошибка: ${message}`);
+      });
+    },
+    [appendLog, runBusy],
+  );
+
+  const sendMessage = useCallback(() => {
+    const normalized = chatDraft.trim();
+    if (!normalized || !meshRef.current) return;
+
+    const message = createChatMessage(clientId, nickname, normalized);
+    messageIdsRef.current.add(message.id);
+    setMessages((prev) => trimChatHistory([...prev, message], HISTORY_LIMIT));
+    meshRef.current.sendChatMessage(message);
+    appendLog("info", "Сообщение отправлено в mesh");
+    setChatDraft("");
+  }, [chatDraft, clientId, nickname, appendLog]);
+
+  const clearHistory = useCallback(() => {
+    setMessages([]);
+    messageIdsRef.current = new Set();
+    appendLog("info", "История чата очищена локально");
+  }, [appendLog]);
+
+  const resetSession = useCallback(() => {
+    if (resettingRef.current || busy) return;
+    resettingRef.current = true;
+
+    meshRef.current?.dispose();
+    meshRef.current = null;
+    const preserved = resetSessionState();
+    setClientId(crypto.randomUUID());
+    setNickname(preserved.nickname);
+    setNicknameDraft(preserved.nicknameDraft);
+    setMessages([]);
+    setPeers([]);
+    setHostOfferCode("");
+    setAnswerCode("");
+    setError("");
+    setDiagnostics([]);
+    messageIdsRef.current = new Set();
+    appendLog("info", "Сессия сброшена");
+
+    window.setTimeout(() => {
+      resettingRef.current = false;
+    }, 800);
+  }, [appendLog, busy]);
+
+  const clearLog = useCallback(() => {
+    setLogEntries([]);
+  }, []);
+
+  const value = useMemo<SessionContextValue>(
+    () => ({
+      clientId,
+      nickname,
+      nicknameDraft,
+      setNicknameDraft,
+      messages,
+      peers,
+      chatDraft,
+      setChatDraft,
+      hostOfferCode,
+      answerCode,
+      error,
+      busy,
+      busyLabel,
+      logEntries,
+      diagnostics,
+      extendedRelayGather,
+      setExtendedRelayGather,
+      phase,
+      phaseMeta,
+      isConnected,
+      saveNickname,
+      becomeHost,
+      handleScannedValue,
+      sendMessage,
+      clearHistory,
+      resetSession,
+      clearLog,
+      appendLog,
+    }),
+    [
+      clientId,
+      nickname,
+      nicknameDraft,
+      messages,
+      peers,
+      chatDraft,
+      hostOfferCode,
+      answerCode,
+      error,
+      busy,
+      busyLabel,
+      logEntries,
+      diagnostics,
+      extendedRelayGather,
+      phase,
+      phaseMeta,
+      isConnected,
+      saveNickname,
+      becomeHost,
+      handleScannedValue,
+      sendMessage,
+      clearHistory,
+      resetSession,
+      clearLog,
+      appendLog,
+    ],
+  );
+
+  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
+}

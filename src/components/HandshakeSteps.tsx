@@ -6,7 +6,7 @@ const STEPS = [
   { id: PHASE.READY, label: "Роль" },
   { id: PHASE.HOST_OFFER, label: "Приглашение" },
   { id: PHASE.GUEST_ANSWER, label: "Ответ" },
-  { id: PHASE.CHAT, label: "Чат" },
+  { id: PHASE.CHAT, label: "Онлайн" },
 ] as const;
 
 function stepIndex(phase: SessionPhase): number {

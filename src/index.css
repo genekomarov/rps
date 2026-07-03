@@ -282,3 +282,169 @@ button:disabled {
   border-color: #93c5fd;
   background: #eff6ff;
 }
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  padding: 0.85rem 1rem;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.app-brand {
+  flex: 1 1 12rem;
+}
+
+.app-title-link {
+  color: inherit;
+  text-decoration: none;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.app-tagline {
+  font-size: 0.88rem;
+  margin-top: 0.15rem;
+}
+
+.app-nav {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.app-nav a {
+  color: #1d4ed8;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.app-nav a:hover {
+  text-decoration: underline;
+}
+
+.connection-badge {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #166534;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+}
+
+.connection-badge-offline {
+  color: #92400e;
+  background: #fffbeb;
+  border-color: #fcd34d;
+}
+
+.welcome-page {
+  gap: 1rem;
+}
+
+.welcome-lead {
+  line-height: 1.5;
+}
+
+.welcome-status {
+  font-weight: 600;
+}
+
+.welcome-status-online {
+  color: #166534;
+}
+
+.welcome-offline {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.button-link,
+.game-launch-link,
+.game-back-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  border-radius: 8px;
+  padding: 0.5rem 0.8rem;
+  font-weight: 600;
+}
+
+.button-link,
+.game-launch-link {
+  background: #111827;
+  color: #fff;
+  width: fit-content;
+}
+
+.game-back-link {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.accordion {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.65rem;
+}
+
+.accordion-item {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f9fafb;
+}
+
+.accordion-item-open {
+  background: #fff;
+}
+
+.accordion-heading {
+  margin: 0;
+}
+
+.accordion-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: transparent;
+  color: inherit;
+  border-radius: 0;
+  padding: 0.75rem 0.9rem;
+  text-align: left;
+  font: inherit;
+  font-weight: 600;
+}
+
+.accordion-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.accordion-panel {
+  padding: 0 0.9rem 0.9rem;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.accordion-description {
+  margin: 0;
+}
+
+.game-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
