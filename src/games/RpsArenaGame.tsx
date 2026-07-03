@@ -5,11 +5,10 @@ import {
   BOARD_ROWS,
   getLegalMoves,
   isBottomPlayer,
-  weaponGlyph,
   weaponLabel,
-  type ArenaPiece,
   type Weapon,
 } from "./rpsArena/logic";
+import { ArenaPieceIcon, WeaponIcon } from "./rpsArena/icons";
 import { useRpsArena } from "./rpsArena/useRpsArena";
 
 function statusMessage(
@@ -32,20 +31,6 @@ function statusMessage(
   }
 
   return isMyTurn ? "Ваш ход" : "Ход соперника";
-}
-
-function renderPiece(piece: ArenaPiece, isOwn: boolean): string {
-  if (!isOwn && !piece.revealed) {
-    return "🎴";
-  }
-
-  if (piece.kind === "flag") {
-    return "🚩";
-  }
-  if (piece.kind === "trap") {
-    return "🕳️";
-  }
-  return piece.weapon ? weaponGlyph(piece.weapon) : "❓";
 }
 
 export default function RpsArenaGame() {
@@ -198,7 +183,7 @@ export default function RpsArenaGame() {
                     >
                       {piece ? (
                         <span className={`arena-piece${isOwn ? " arena-piece-own" : ""}`}>
-                          {renderPiece(piece, Boolean(isOwn))}
+                          <ArenaPieceIcon piece={piece} isOwn={Boolean(isOwn)} className="arena-icon" />
                         </span>
                       ) : null}
                     </button>
@@ -229,8 +214,9 @@ export default function RpsArenaGame() {
               <p className="muted">Одинаковое оружие — выберите жест для перестрелки.</p>
               <div className="actions">
                 {(["rock", "paper", "scissors"] as Weapon[]).map((weapon) => (
-                  <button key={weapon} type="button" onClick={() => chooseTiebreak(weapon)}>
-                    {weaponGlyph(weapon)} {weaponLabel(weapon)}
+                  <button key={weapon} type="button" className="arena-tiebreak-button" onClick={() => chooseTiebreak(weapon)}>
+                    <WeaponIcon weapon={weapon} className="arena-icon" />
+                    {weaponLabel(weapon)}
                   </button>
                 ))}
               </div>

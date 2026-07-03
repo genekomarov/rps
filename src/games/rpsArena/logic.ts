@@ -505,21 +505,10 @@ export function weaponLabel(weapon: Weapon): string {
   }
 }
 
-export function weaponGlyph(weapon: Weapon): string {
-  switch (weapon) {
-    case "rock":
-      return "✊";
-    case "paper":
-      return "✋";
-    case "scissors":
-      return "✂️";
-  }
-}
-
 export function pieceLabel(piece: ArenaPiece, viewerId: string): string {
-  if (piece.ownerId !== viewerId && !piece.revealed) return "?";
-  if (piece.kind === "flag") return "🚩";
-  if (piece.kind === "trap") return "🕳️";
-  if (piece.weapon) return weaponGlyph(piece.weapon);
-  return "?";
+  if (piece.ownerId !== viewerId && !piece.revealed) return "Скрытая карта";
+  if (piece.kind === "flag") return "Знамя";
+  if (piece.kind === "trap") return "Ловушка";
+  if (piece.weapon) return weaponLabel(piece.weapon);
+  return "Неизвестно";
 }
