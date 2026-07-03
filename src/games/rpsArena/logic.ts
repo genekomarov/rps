@@ -508,9 +508,9 @@ export function weaponLabel(weapon: Weapon): string {
 export function weaponGlyph(weapon: Weapon): string {
   switch (weapon) {
     case "rock":
-      return "🪨";
+      return "✊";
     case "paper":
-      return "📄";
+      return "✋";
     case "scissors":
       return "✂️";
   }

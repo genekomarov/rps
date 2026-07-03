@@ -553,6 +553,7 @@ button:disabled {
   min-width: 42px;
   min-height: 42px;
   background: #fff;
+  color: #111827;
   border: 1px solid #d1d5db;
   border-radius: 6px;
   padding: 0;
@@ -577,6 +578,7 @@ button:disabled {
 .arena-piece {
   font-size: 1.35rem;
   line-height: 1;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
 }
 
 .arena-setup-list {
@@ -595,6 +597,11 @@ button:disabled {
 .arena-setup,
 .arena-tiebreak {
   gap: 0.75rem;
+}
+
+.arena-tiebreak .actions button {
+  background: #e5e7eb;
+  color: #111827;
 }
 
 .pwa-banner {
