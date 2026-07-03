@@ -35,16 +35,17 @@ function statusMessage(
 }
 
 function renderPiece(piece: ArenaPiece, isOwn: boolean): string {
+  if (!isOwn && !piece.revealed) {
+    return "🎴";
+  }
+
   if (piece.kind === "flag") {
-    return isOwn || piece.revealed ? "🚩" : "❓";
+    return "🚩";
   }
   if (piece.kind === "trap") {
-    return isOwn || piece.revealed ? "🕳️" : "❓";
+    return "🕳️";
   }
-  if (isOwn || piece.revealed) {
-    return piece.weapon ? weaponGlyph(piece.weapon) : "❓";
-  }
-  return "🎴";
+  return piece.weapon ? weaponGlyph(piece.weapon) : "❓";
 }
 
 export default function RpsArenaGame() {
@@ -83,9 +84,21 @@ export default function RpsArenaGame() {
 
   const myPieces = state?.pieces.filter((piece) => piece.ownerId === clientId) ?? [];
   const canEditSetup = Boolean(state?.phase === "setup" && !state.setupReady[clientId]);
+  const shouldFlipBoard = Boolean(state && !isBottomPlayer(clientId, state));
 
-  function handleCellClick(row: number, col: number) {
+  function toModelCoords(displayRow: number, displayCol: number): { row: number; col: number } {
+    if (!shouldFlipBoard) {
+      return { row: displayRow, col: displayCol };
+    }
+    return {
+      row: BOARD_ROWS - 1 - displayRow,
+      col: displayCol,
+    };
+  }
+
+  function handleCellClick(displayRow: number, displayCol: number) {
     if (!state) return;
+    const { row, col } = toModelCoords(displayRow, displayCol);
 
     const piece = state.pieces.find((item) => item.row === row && item.col === col);
     const isLegalTarget = legalMoves.some((move) => move.row === row && move.col === col);
@@ -156,8 +169,9 @@ export default function RpsArenaGame() {
               className="arena-board"
               style={{ gridTemplateColumns: `repeat(${BOARD_COLS}, minmax(42px, 1fr))` }}
             >
-              {Array.from({ length: BOARD_ROWS }, (_, row) =>
-                Array.from({ length: BOARD_COLS }, (_, col) => {
+              {Array.from({ length: BOARD_ROWS }, (_, displayRow) =>
+                Array.from({ length: BOARD_COLS }, (_, displayCol) => {
+                  const { row, col } = toModelCoords(displayRow, displayCol);
                   const piece = state.pieces.find((item) => item.row === row && item.col === col);
                   const isOwn = piece?.ownerId === clientId;
                   const isSelected = piece?.id === selectedPieceId;
@@ -170,12 +184,12 @@ export default function RpsArenaGame() {
 
                   return (
                     <button
-                      key={`${row}-${col}`}
+                      key={`${displayRow}-${displayCol}`}
                       type="button"
                       className={`arena-cell${isSelected ? " arena-cell-selected" : ""}${isMoveTarget ? " arena-cell-target" : ""}${isHomeRow ? " arena-cell-home" : ""}`}
-                      onClick={() => handleCellClick(row, col)}
+                      onClick={() => handleCellClick(displayRow, displayCol)}
                       disabled={state.phase === "tiebreak" || state.phase === "finished"}
-                      aria-label={`Клетка ${row + 1}:${col + 1}`}
+                      aria-label={`Клетка ${displayRow + 1}:${displayCol + 1}`}
                     >
                       {piece ? (
                         <span className={`arena-piece${isOwn ? " arena-piece-own" : ""}`}>
