@@ -184,7 +184,7 @@ export function assignSpecial(
       if (special === "soldier") {
         return { ...item, kind: "soldier" as const };
       }
-      return { ...item, kind: special, weapon: null, revealed: false };
+      return { ...item, kind: special, revealed: false };
     }
 
     if (special !== "soldier" && item.kind === special) {

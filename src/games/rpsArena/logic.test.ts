@@ -47,6 +47,21 @@ describe("assignSpecial", () => {
     expect(withTrap).not.toBeNull();
     expect(markSetupReady(withTrap!, "alice")).not.toBeNull();
   });
+
+  it("restores soldier weapon after unsetting special", () => {
+    const state = createInitialState("alice", "bob", () => 0.1);
+    const soldier = state.pieces.find(
+      (piece) => piece.ownerId === "alice" && piece.kind === "soldier" && piece.weapon !== null,
+    )!;
+
+    const originalWeapon = soldier.weapon;
+    const asFlag = assignSpecial(state, "alice", soldier.id, "flag");
+    const backToSoldier = assignSpecial(asFlag!, "alice", soldier.id, "soldier");
+    const updated = backToSoldier!.pieces.find((piece) => piece.id === soldier.id)!;
+
+    expect(updated.kind).toBe("soldier");
+    expect(updated.weapon).toBe(originalWeapon);
+  });
 });
 
 describe("setup", () => {
