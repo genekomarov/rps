@@ -16,6 +16,12 @@ export const GAME_CATALOG: GameDefinition[] = [
     title: "Крестики-нолики",
     description: "Классическая игра 3×3 на двоих. Счёт ведётся только в текущей сессии.",
   },
+  {
+    id: "rps-arena",
+    title: "Камень-ножницы-бумага",
+    description:
+      "Тактическая игра ICQ на поле 7×6: знамя, ловушка, скрытое оружие и дуэли при ничьей.",
+  },
 ];
 
 export function findGame(gameId: string): GameDefinition | undefined {
