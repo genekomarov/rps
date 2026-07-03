@@ -17,10 +17,11 @@ import {
   trimChatHistory,
 } from "../lib/protocol";
 import { getPhaseMeta, resolvePhase } from "../lib/sessionPhase";
-import { loadState, resetSessionState, saveState } from "../lib/storage";
+import { loadClientId, loadState, resetClientId, resetSessionState, saveState } from "../lib/storage";
 import { WebRtcMesh } from "../lib/webrtc";
 import type {
   ChatMessage,
+  GameMessagePayload,
   HostAnswerBody,
   HostOfferBody,
   LogEntry,
@@ -62,6 +63,8 @@ export interface SessionContextValue {
   resetSession: () => void;
   clearLog: () => void;
   appendLog: (level: LogLevel, message: string) => void;
+  sendGameMessage: (gameId: string, body: unknown) => void;
+  subscribeGameMessages: (listener: (message: GameMessagePayload) => void) => () => void;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -76,7 +79,7 @@ export function useSession(): SessionContextValue {
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const stored = useMemo(() => loadState(), []);
-  const [clientId, setClientId] = useState(stored.clientId || crypto.randomUUID());
+  const [clientId, setClientId] = useState(() => loadClientId());
   const [nickname, setNickname] = useState(stored.nickname || "");
   const [nicknameDraft, setNicknameDraft] = useState(
     stored.nicknameDraft || stored.nickname || "",
@@ -101,6 +104,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const resettingRef = useRef(false);
   const messagesRef = useRef(messages);
   const messageIdsRef = useRef(new Set(messages.map((item) => item.id)));
+  const gameMessageListenersRef = useRef(new Set<(message: GameMessagePayload) => void>());
 
   const phase = resolvePhase({ nickname, hostOfferCode, answerCode, peers, busy });
   const phaseMeta = getPhaseMeta(phase);
@@ -125,10 +129,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
-
-  useEffect(() => {
-    saveState({ clientId });
-  }, [clientId]);
 
   useEffect(() => {
     saveState({ nickname });
@@ -166,6 +166,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         if (messageIdsRef.current.has(nextMessage.id)) return;
         messageIdsRef.current.add(nextMessage.id);
         setMessages((prev) => trimChatHistory([...prev, nextMessage], HISTORY_LIMIT));
+      },
+      onGameMessage: (gameMessage) => {
+        for (const listener of gameMessageListenersRef.current) {
+          listener(gameMessage);
+        }
       },
       onStatus: (nextStatus) => {
         appendLog("info", `Статус mesh: ${nextStatus}`);
@@ -288,7 +293,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     meshRef.current?.dispose();
     meshRef.current = null;
     const preserved = resetSessionState();
-    setClientId(crypto.randomUUID());
+    setClientId(resetClientId());
     setNickname(preserved.nickname);
     setNicknameDraft(preserved.nicknameDraft);
     setMessages([]);
@@ -307,6 +312,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const clearLog = useCallback(() => {
     setLogEntries([]);
+  }, []);
+
+  const sendGameMessage = useCallback(
+    (gameId: string, body: unknown) => {
+      meshRef.current?.sendGameMessage({
+        gameId,
+        senderId: clientId,
+        body,
+      });
+    },
+    [clientId],
+  );
+
+  const subscribeGameMessages = useCallback((listener: (message: GameMessagePayload) => void) => {
+    gameMessageListenersRef.current.add(listener);
+    return () => {
+      gameMessageListenersRef.current.delete(listener);
+    };
   }, []);
 
   const value = useMemo<SessionContextValue>(
@@ -339,6 +362,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       resetSession,
       clearLog,
       appendLog,
+      sendGameMessage,
+      subscribeGameMessages,
     }),
     [
       clientId,
@@ -366,6 +391,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       resetSession,
       clearLog,
       appendLog,
+      sendGameMessage,
+      subscribeGameMessages,
     ],
   );
 

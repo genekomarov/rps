@@ -8,6 +8,7 @@ import {
   decodeSignalPayload,
   encodeSignalPayload,
   isValidChatMessage,
+  isValidGameMessagePayload,
   trimChatHistory,
 } from "./protocol";
 
@@ -67,6 +68,23 @@ describe("isValidChatMessage", () => {
         timestamp: "not-a-number",
       }),
     ).toBe(false);
+  });
+});
+
+describe("isValidGameMessagePayload", () => {
+  it("accepts valid game payloads", () => {
+    expect(
+      isValidGameMessagePayload({
+        gameId: "tic-tac-toe",
+        senderId: "player-1",
+        body: { type: "state" },
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects incomplete payloads", () => {
+    expect(isValidGameMessagePayload(null)).toBe(false);
+    expect(isValidGameMessagePayload({ gameId: "tic-tac-toe" })).toBe(false);
   });
 });
 

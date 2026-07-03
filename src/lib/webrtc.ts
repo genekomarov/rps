@@ -1,6 +1,7 @@
 import type {
   ChatMessage,
   Envelope,
+  GameMessagePayload,
   HostAnswerBody,
   HostOfferBody,
   LogLevel,
@@ -13,6 +14,7 @@ import {
   ProtocolTypes,
   createEnvelope,
   isValidChatMessage,
+  isValidGameMessagePayload,
   trimChatHistory,
 } from "./protocol";
 import {
@@ -68,6 +70,7 @@ export interface WebRtcMeshOptions {
   extendedRelayGather?: boolean;
   onPeerListChange: (peers: PeerListItem[]) => void;
   onMessage: (message: ChatMessage) => void;
+  onGameMessage?: (message: GameMessagePayload) => void;
   onStatus: (status: MeshStatus) => void;
   onError?: (message: string) => void;
   onLog?: (level: LogLevel, message: string) => void;
@@ -302,6 +305,7 @@ export class WebRtcMesh {
   selfName: string;
   onPeerListChange: (peers: PeerListItem[]) => void;
   onMessage: (message: ChatMessage) => void;
+  onGameMessage?: (message: GameMessagePayload) => void;
   onStatus: (status: MeshStatus) => void;
   onError?: (message: string) => void;
   onLog?: (level: LogLevel, message: string) => void;
@@ -319,6 +323,7 @@ export class WebRtcMesh {
     this.selfName = options.selfName;
     this.onPeerListChange = options.onPeerListChange;
     this.onMessage = options.onMessage;
+    this.onGameMessage = options.onGameMessage;
     this.onStatus = options.onStatus;
     this.onError = options.onError;
     this.onLog = options.onLog;
@@ -602,6 +607,10 @@ export class WebRtcMesh {
 
   sendChatMessage(message: ChatMessage) {
     this.broadcastEnvelope(createEnvelope(ProtocolTypes.chatMessage, message), null);
+  }
+
+  sendGameMessage(message: GameMessagePayload) {
+    this.broadcastEnvelope(createEnvelope(ProtocolTypes.gameMessage, message), null);
   }
 
   waitForDataChannel(peer: MeshPeer): Promise<void> {
@@ -967,6 +976,14 @@ export class WebRtcMesh {
         this.onMessage(envelope.payload);
         this.broadcastEnvelope(envelope, fromPeerId);
       }
+      return;
+    }
+
+    if (envelope.type === ProtocolTypes.gameMessage) {
+      if (isValidGameMessagePayload(envelope.payload) && envelope.payload.senderId !== this.selfId) {
+        this.onGameMessage?.(envelope.payload);
+      }
+      this.broadcastEnvelope(envelope, fromPeerId);
       return;
     }
 

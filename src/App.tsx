@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import AppLayout from "./components/AppLayout";
 import { SessionProvider, useSession } from "./context/SessionContext";
-import ChatGame from "./games/ChatGame";
 import { findGame } from "./games/catalog";
+import { GAME_COMPONENTS } from "./games/registry";
 import { useHashRoute } from "./hooks/useHashRoute";
 import ConnectionPage from "./pages/ConnectionPage";
 import WelcomePage from "./pages/WelcomePage";
@@ -32,10 +32,11 @@ function AppRouter() {
       );
     }
 
-    if (route.gameId === "chat") {
+    const GameComponent = GAME_COMPONENTS[route.gameId];
+    if (GameComponent) {
       return (
         <AppLayout connected={isConnected} nickname={nickname}>
-          <ChatGame />
+          <GameComponent />
         </AppLayout>
       );
     }

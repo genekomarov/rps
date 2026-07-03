@@ -11,6 +11,11 @@ export const GAME_CATALOG: GameDefinition[] = [
     description:
       "Простой P2P-чат для проверки соединения и обмена сообщениями между участниками.",
   },
+  {
+    id: "tic-tac-toe",
+    title: "Крестики-нолики",
+    description: "Классическая игра 3×3 на двоих. Счёт ведётся только в текущей сессии.",
+  },
 ];
 
 export function findGame(gameId: string): GameDefinition | undefined {

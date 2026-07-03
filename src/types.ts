@@ -20,7 +20,14 @@ export type ProtocolType =
   | "chatMessage"
   | "historySync"
   | "peerAnnounce"
-  | "forwardSignal";
+  | "forwardSignal"
+  | "gameMessage";
+
+export interface GameMessagePayload {
+  gameId: string;
+  senderId: string;
+  body: unknown;
+}
 
 export interface Envelope<T = unknown> {
   id: string;

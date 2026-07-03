@@ -448,3 +448,67 @@ button:disabled {
   gap: 0.75rem;
   flex-wrap: wrap;
 }
+
+.ttt-status {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.ttt-scoreboard {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.ttt-score-item {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f9fafb;
+}
+
+.ttt-score-item strong {
+  font-size: 1.35rem;
+}
+
+.ttt-board-card {
+  align-items: center;
+}
+
+.ttt-board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(72px, 96px));
+  gap: 0.5rem;
+  width: fit-content;
+}
+
+.ttt-cell {
+  aspect-ratio: 1;
+  font-size: 2rem;
+  font-weight: 700;
+  background: #fff;
+  color: #111827;
+  border: 2px solid #d1d5db;
+  border-radius: 12px;
+  padding: 0;
+}
+
+.ttt-cell:disabled:not(.ttt-cell-x):not(.ttt-cell-o) {
+  opacity: 1;
+  cursor: default;
+}
+
+.ttt-cell:not(:disabled):hover {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.ttt-cell-x {
+  color: #1d4ed8;
+}
+
+.ttt-cell-o {
+  color: #b45309;
+}

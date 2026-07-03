@@ -1,7 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadState, resetSessionState, resetState, saveState } from "./storage";
+import {
+  loadClientId,
+  loadState,
+  resetClientId,
+  resetSessionState,
+  resetState,
+  saveState,
+} from "./storage";
 
 const STORAGE_KEY = "rpschat.state.v1";
+const CLIENT_ID_KEY = "rpschat.clientId";
 
 function createStorage(): Storage {
   const store = new Map<string, string>();
@@ -32,7 +40,10 @@ describe("storage", () => {
   const originalWindow = globalThis.window;
 
   beforeEach(() => {
-    globalThis.window = { localStorage: createStorage() } as Window & typeof globalThis;
+    globalThis.window = {
+      localStorage: createStorage(),
+      sessionStorage: createStorage(),
+    } as Window & typeof globalThis;
   });
 
   afterEach(() => {
@@ -133,7 +144,26 @@ describe("storage", () => {
     expect(() => saveState({ nickname: "X" })).not.toThrow();
     expect(() => resetState()).not.toThrow();
     expect(resetSessionState()).toEqual({ nickname: "", nicknameDraft: "" });
+    expect(loadClientId()).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
 
     globalThis.window = originalWindow;
+  });
+
+  it("keeps client id in session storage per tab", () => {
+    const first = loadClientId();
+    const second = loadClientId();
+
+    expect(first).toBe(second);
+    expect(window.sessionStorage.getItem(CLIENT_ID_KEY)).toBe(first);
+  });
+
+  it("rotates client id on reset", () => {
+    const first = loadClientId();
+    const next = resetClientId();
+
+    expect(next).not.toBe(first);
+    expect(loadClientId()).toBe(next);
   });
 });

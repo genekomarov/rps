@@ -1,6 +1,7 @@
 import type {
   ChatMessage,
   Envelope,
+  GameMessagePayload,
   HostAnswerBody,
   HostOfferBody,
   ProtocolType,
@@ -276,10 +277,21 @@ export function isValidChatMessage(message: unknown): message is ChatMessage {
   );
 }
 
+export function isValidGameMessagePayload(payload: unknown): payload is GameMessagePayload {
+  if (!payload || typeof payload !== "object") return false;
+  const candidate = payload as Partial<GameMessagePayload>;
+  return Boolean(
+    typeof candidate.gameId === "string" &&
+      typeof candidate.senderId === "string" &&
+      candidate.body !== undefined,
+  );
+}
+
 export const ProtocolTypes = {
   hello: "hello",
   chatMessage: "chatMessage",
   historySync: "historySync",
   peerAnnounce: "peerAnnounce",
   forwardSignal: "forwardSignal",
+  gameMessage: "gameMessage",
 } as const;
