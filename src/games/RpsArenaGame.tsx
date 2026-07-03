@@ -182,7 +182,9 @@ export default function RpsArenaGame() {
                       aria-label={`Клетка ${displayRow + 1}:${displayCol + 1}`}
                     >
                       {piece ? (
-                        <span className={`arena-piece${isOwn ? " arena-piece-own" : ""}`}>
+                        <span
+                          className={`arena-piece arena-piece-player-${piece.ownerId === state.playerAId ? "a" : "b"}${isOwn ? " arena-piece-own" : ""}`}
+                        >
                           <ArenaPieceIcon piece={piece} isOwn={Boolean(isOwn)} className="arena-icon" />
                         </span>
                       ) : null}
@@ -197,8 +199,8 @@ export default function RpsArenaGame() {
             <section className="card arena-setup">
               <h2>Расстановка</h2>
               <p className="muted">
-                Кликайте по своим картам прямо на поле, чтобы переключать: солдат → знамя →
-                ловушка → солдат. Нужно выставить ровно по одному знамени и ловушке.
+                Кликайте по своим картам прямо на поле, чтобы переключать: оружие → знамя →
+                ловушка → оружие. Нужно выставить ровно по одному знамени и ловушке.
               </p>
               <div className="actions">
                 <button type="button" onClick={readySetup}>

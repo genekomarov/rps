@@ -579,6 +579,17 @@ button:disabled {
   display: grid;
   place-items: center;
   line-height: 0;
+  width: calc(100% - 4px);
+  height: calc(100% - 4px);
+  border-radius: 4px;
+}
+
+.arena-piece-player-a {
+  background: #dbeafe;
+}
+
+.arena-piece-player-b {
+  background: #fecaca;
 }
 
 .arena-icon {

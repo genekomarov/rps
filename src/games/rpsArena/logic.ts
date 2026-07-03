@@ -3,7 +3,6 @@ export const RPS_ARENA_GAME_ID = "rps-arena";
 export const BOARD_COLS = 7;
 export const BOARD_ROWS = 6;
 export const PIECES_PER_PLAYER = 14;
-export const SOLDIERS_WITH_WEAPON = 12;
 
 export type Weapon = "rock" | "paper" | "scissors";
 export type PieceKind = "soldier" | "flag" | "trap";
@@ -47,7 +46,16 @@ export type RpsArenaWireMessage =
   | { type: "state"; state: RpsArenaState }
   | { type: "request-state" };
 
-const WEAPON_SET: Weapon[] = ["rock", "paper", "scissors", "rock", "paper", "scissors", "rock", "paper", "scissors", "rock", "paper", "scissors"];
+const WEAPONS_CYCLE: Weapon[] = ["rock", "paper", "scissors"];
+
+function shuffleWeapons(count: number, random = Math.random): Weapon[] {
+  const weapons: Weapon[] = Array.from({ length: count }, (_, index) => WEAPONS_CYCLE[index % WEAPONS_CYCLE.length]);
+  for (let index = weapons.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [weapons[index], weapons[swapIndex]] = [weapons[swapIndex], weapons[index]];
+  }
+  return weapons;
+}
 
 const ORTHOGONAL_DELTAS = [
   [-1, 0],
@@ -80,39 +88,27 @@ export function createEmptyScore(playerIds: string[]): ArenaScore {
   return { wins };
 }
 
-function shuffleWeapons(random = Math.random): Weapon[] {
-  const weapons = [...WEAPON_SET];
-  for (let index = weapons.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(random() * (index + 1));
-    [weapons[index], weapons[swapIndex]] = [weapons[swapIndex], weapons[index]];
-  }
-  return weapons;
-}
-
 function homeRowsForPlayer(playerId: string, state: RpsArenaState): [number, number] {
   return isBottomPlayer(playerId, state) ? [4, 5] : [0, 1];
 }
 
 export function createPlayerPieces(ownerId: string, state: RpsArenaState, random = Math.random): ArenaPiece[] {
   const [rowA, rowB] = homeRowsForPlayer(ownerId, state);
-  const weapons = shuffleWeapons(random);
+  const weapons = shuffleWeapons(PIECES_PER_PLAYER, random);
   const pieces: ArenaPiece[] = [];
-  let weaponIndex = 0;
   let slot = 0;
 
   for (const row of [rowA, rowB]) {
     for (let col = 0; col < BOARD_COLS; col += 1) {
-      const hasWeapon = weaponIndex < SOLDIERS_WITH_WEAPON;
       pieces.push({
         id: `${ownerId}-p${slot}`,
         ownerId,
         kind: "soldier",
-        weapon: hasWeapon ? weapons[weaponIndex] : null,
+        weapon: weapons[slot],
         row,
         col,
         revealed: false,
       });
-      if (hasWeapon) weaponIndex += 1;
       slot += 1;
     }
   }
@@ -258,8 +254,12 @@ function beginTiebreak(
   targetRow: number,
   targetCol: number,
 ): RpsArenaState {
+  let pieces = revealPiece(state.pieces, attackerPieceId);
+  pieces = revealPiece(pieces, defenderPieceId);
+
   return {
     ...state,
+    pieces,
     phase: "tiebreak",
     tiebreak: {
       attackerPieceId,
@@ -306,7 +306,7 @@ function resolveSoldierBattle(
 
   return {
     ...state,
-    pieces: removePiece(state.pieces, attacker.id),
+    pieces: revealPiece(removePiece(state.pieces, attacker.id), defender.id),
     currentTurn: nextTurn,
     tiebreak: null,
   };
@@ -469,7 +469,7 @@ export function submitTiebreakChoice(
   return {
     ...state,
     phase: "playing",
-    pieces: removePiece(state.pieces, attacker.id),
+    pieces: revealPiece(removePiece(state.pieces, attacker.id), defender.id),
     currentTurn: nextTurn,
     tiebreak: null,
   };

@@ -64,6 +64,13 @@ describe("assignSpecial", () => {
   });
 });
 
+describe("createInitialState", () => {
+  it("assigns weapon to every piece", () => {
+    const state = createInitialState("alice", "bob", () => 0.1);
+    expect(state.pieces.every((piece) => piece.weapon !== null)).toBe(true);
+  });
+});
+
 describe("setup", () => {
   it("starts in setup with 28 pieces", () => {
     const state = createInitialState("alice", "bob", () => 0.1);
@@ -168,12 +175,33 @@ describe("tiebreak", () => {
 
     state = applyMove(state, "alice", attacker.id, defender.row, defender.col)!;
     expect(state.phase).toBe("tiebreak");
+    expect(state.pieces.find((piece) => piece.id === attacker.id)?.revealed).toBe(true);
+    expect(state.pieces.find((piece) => piece.id === defender.id)?.revealed).toBe(true);
 
     state = submitTiebreakChoice(state, "alice", "paper")!;
     state = submitTiebreakChoice(state, "bob", "rock")!;
     expect(state.phase).toBe("playing");
     expect(state.pieces.some((piece) => piece.id === defender.id)).toBe(false);
     expect(state.pieces.find((piece) => piece.id === attacker.id)?.revealed).toBe(true);
+  });
+
+  it("reveals defender after winning battle", () => {
+    let state = readyBothPlayers(createInitialState("alice", "bob", () => 0.1));
+    const attacker = state.pieces.find((piece) => piece.ownerId === "alice" && piece.kind === "soldier")!;
+    const defender = state.pieces.find((piece) => piece.ownerId === "bob" && piece.kind === "soldier")!;
+
+    state = {
+      ...state,
+      pieces: state.pieces.map((piece) => {
+        if (piece.id === attacker.id) return { ...piece, weapon: "rock", row: defender.row + 1, col: defender.col };
+        if (piece.id === defender.id) return { ...piece, weapon: "paper" };
+        return piece;
+      }),
+    };
+
+    state = applyMove(state, "alice", attacker.id, defender.row, defender.col)!;
+    expect(state.pieces.some((piece) => piece.id === attacker.id)).toBe(false);
+    expect(state.pieces.find((piece) => piece.id === defender.id)?.revealed).toBe(true);
   });
 });
 
