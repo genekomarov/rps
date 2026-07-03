@@ -63,6 +63,7 @@ export default function RpsArenaGame() {
     moveSelectedPiece,
     chooseTiebreak,
     playNextRound,
+    clearGameState,
     isMyTurn,
     myTiebreakChoice,
   } = useRpsArena();
@@ -246,6 +247,19 @@ export default function RpsArenaGame() {
               <div className="actions">
                 <button type="button" onClick={playNextRound}>
                   Следующая партия
+                </button>
+                <button type="button" className="button-secondary" onClick={clearGameState}>
+                  Очистить состояние
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          {state.phase !== "finished" ? (
+            <section className="card">
+              <div className="actions">
+                <button type="button" className="button-secondary" onClick={clearGameState}>
+                  Очистить состояние
                 </button>
               </div>
             </section>

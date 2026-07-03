@@ -181,6 +181,12 @@ export function useRpsArena() {
     setSelectedPieceId(null);
   }, [publishState]);
 
+  const clearGameState = useCallback(() => {
+    if (!stateRef.current) return;
+    publishState(startNextRound(stateRef.current));
+    setSelectedPieceId(null);
+  }, [publishState]);
+
   const isMyTurn = Boolean(state && (state.currentTurn === clientId || state.phase === "tiebreak"));
   const myTiebreakChoice = state?.tiebreak?.choices[clientId] ?? null;
 
@@ -198,6 +204,7 @@ export function useRpsArena() {
     moveSelectedPiece,
     chooseTiebreak,
     playNextRound,
+    clearGameState,
     isMyTurn,
     myTiebreakChoice,
   };

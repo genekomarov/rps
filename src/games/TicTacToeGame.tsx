@@ -98,8 +98,17 @@ export default function TicTacToeGame() {
               <button type="button" onClick={startNextRound}>
                 Следующий раунд
               </button>
+              <button type="button" className="button-secondary" onClick={startNextRound}>
+                Очистить состояние
+              </button>
             </div>
-          ) : null}
+          ) : (
+            <div className="actions">
+              <button type="button" className="button-secondary" onClick={startNextRound}>
+                Очистить состояние
+              </button>
+            </div>
+          )}
 
           {myMark ? <p className="muted">Вы играете за {myMark}.</p> : null}
         </section>

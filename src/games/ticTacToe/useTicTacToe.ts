@@ -152,7 +152,7 @@ export function useTicTacToe() {
   );
 
   const startNextRoundAction = useCallback(() => {
-    if (!stateRef.current || stateRef.current.status !== "finished") return;
+    if (!stateRef.current) return;
     publishState(startNextRound(stateRef.current));
   }, [publishState]);
 
