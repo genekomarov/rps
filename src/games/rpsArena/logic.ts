@@ -328,7 +328,6 @@ function resolveTrapAttack(state: RpsArenaState, attacker: ArenaPiece, trap: Are
   const nextTurn = getOpponentId(state, attacker.ownerId) ?? state.currentTurn;
   let pieces = removePiece(state.pieces, attacker.id);
   pieces = pieces.map((piece) => (piece.id === trap.id ? { ...piece, revealed: true } : piece));
-  pieces = removePiece(pieces, trap.id);
   return {
     ...state,
     pieces,

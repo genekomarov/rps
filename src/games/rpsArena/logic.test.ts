@@ -138,7 +138,7 @@ describe("applyMove", () => {
     expect(next?.score.wins.alice).toBe(1);
   });
 
-  it("removes attacker on trap", () => {
+  it("removes attacker on trap and reveals trap", () => {
     let state = readyBothPlayers(createInitialState("alice", "bob", () => 0.1));
     const attacker = state.pieces.find((piece) => piece.ownerId === "alice" && piece.kind === "soldier")!;
     const enemyTrap = state.pieces.find((piece) => piece.ownerId === "bob" && piece.kind === "trap")!;
@@ -153,7 +153,10 @@ describe("applyMove", () => {
 
     const next = applyMove(state, "alice", attacker.id, enemyTrap.row, enemyTrap.col);
     expect(next?.pieces.some((piece) => piece.id === attacker.id)).toBe(false);
-    expect(next?.pieces.some((piece) => piece.id === enemyTrap.id)).toBe(false);
+    expect(next?.pieces.find((piece) => piece.id === enemyTrap.id)).toMatchObject({
+      kind: "trap",
+      revealed: true,
+    });
     expect(next?.phase).toBe("playing");
   });
 });
