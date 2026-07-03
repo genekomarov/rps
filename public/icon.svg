@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="P2P 3@K">
+  <rect width="512" height="512" rx="96" fill="#111827"/>
+  <circle cx="256" cy="256" r="148" fill="#2563eb"/>
+  <text x="256" y="292" text-anchor="middle" font-size="120" font-family="system-ui, sans-serif" fill="#ffffff">P2P</text>
+</svg>

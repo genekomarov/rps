@@ -1,0 +1,1 @@
+{"name":"P2P Игры","short_name":"P2P Игры","description":"Локальные P2P-игры без сервера","start_url":"./","display":"standalone","background_color":"#f3f5fa","theme_color":"#111827","lang":"en","scope":"./","icons":[{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}

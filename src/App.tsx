@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import AppLayout from "./components/AppLayout";
+import PwaUpdateBanner from "./components/PwaUpdateBanner";
 import { SessionProvider, useSession } from "./context/SessionContext";
 import { findGame } from "./games/catalog";
 import { GAME_COMPONENTS } from "./games/registry";
@@ -60,6 +61,7 @@ function AppRouter() {
 export default function App() {
   return (
     <SessionProvider>
+      <PwaUpdateBanner />
       <AppRouter />
     </SessionProvider>
   );
