@@ -50,6 +50,8 @@ export interface LastMove {
   playerId: string;
 }
 
+export type PieceColor = "a" | "b";
+
 export interface RpsArenaState {
   playerAId: string;
   playerBId: string;
@@ -62,6 +64,7 @@ export interface RpsArenaState {
   initiative: DuelChoices | null;
   tiebreak: TiebreakState | null;
   lastMove: LastMove | null;
+  colorByPlayerId: Record<string, PieceColor>;
   options: RpsArenaOptions;
 }
 
@@ -118,6 +121,27 @@ function createEmptyDuelChoices(playerAId: string, playerBId: string): DuelChoic
       [playerBId]: null,
     },
   };
+}
+
+export function assignPlayerColors(
+  playerAId: string,
+  playerBId: string,
+  random = Math.random,
+): Record<string, PieceColor> {
+  if (random() < 0.5) {
+    return { [playerAId]: "a", [playerBId]: "b" };
+  }
+  return { [playerAId]: "b", [playerBId]: "a" };
+}
+
+export function getPieceColor(state: RpsArenaState, playerId: string): PieceColor {
+  const color = state.colorByPlayerId?.[playerId];
+  if (color === "a" || color === "b") return color;
+  return playerId === state.playerAId ? "a" : "b";
+}
+
+function defaultPlayerColors(playerAId: string, playerBId: string): Record<string, PieceColor> {
+  return { [playerAId]: "a", [playerBId]: "b" };
 }
 
 function homeRowsForPlayer(playerId: string, state: RpsArenaState): [number, number] {
@@ -182,6 +206,7 @@ export function createInitialState(
     initiative: skipInitiative ? null : createEmptyDuelChoices(playerAId, playerBId),
     tiebreak: null,
     lastMove: null,
+    colorByPlayerId: assignPlayerColors(playerAId, playerBId, random),
     options,
   };
 
@@ -294,6 +319,7 @@ export function ensureStateShape(state: RpsArenaState): RpsArenaState {
     options: normalizeArenaOptions(state.options),
     initiative: state.initiative ?? null,
     lastMove: state.lastMove ?? null,
+    colorByPlayerId: state.colorByPlayerId ?? defaultPlayerColors(state.playerAId, state.playerBId),
   };
 }
 

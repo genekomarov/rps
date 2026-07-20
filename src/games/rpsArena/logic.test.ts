@@ -404,3 +404,19 @@ describe("assignPlayers", () => {
     expect(assignPlayers("alice", "bob")).toEqual({ playerAId: "alice", playerBId: "bob" });
   });
 });
+
+describe("player colors", () => {
+  it("assigns opposite colors to both players", () => {
+    const state = createInitialState("alice", "bob", () => 0.1);
+    expect(state.colorByPlayerId.alice).toBeTruthy();
+    expect(state.colorByPlayerId.bob).toBeTruthy();
+    expect(state.colorByPlayerId.alice).not.toBe(state.colorByPlayerId.bob);
+  });
+
+  it("randomly flips color assignment", () => {
+    const light = createInitialState("alice", "bob", () => 0.1);
+    const heavy = createInitialState("alice", "bob", () => 0.9);
+    expect(light.colorByPlayerId).toEqual({ alice: "a", bob: "b" });
+    expect(heavy.colorByPlayerId).toEqual({ alice: "b", bob: "a" });
+  });
+});

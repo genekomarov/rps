@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { buildHash } from "../lib/hashRouter";
-import { BOARD_COLS, BOARD_ROWS, getLegalMoves, isBottomPlayer } from "./rpsArena/logic";
+import { BOARD_COLS, BOARD_ROWS, getLegalMoves, getPieceColor, isBottomPlayer } from "./rpsArena/logic";
 import { ArenaPieceIcon } from "./rpsArena/icons";
 import { ArenaDuel } from "./rpsArena/ArenaDuel";
 import { useRpsArena } from "./rpsArena/useRpsArena";
@@ -202,7 +202,7 @@ export default function RpsArenaGame() {
                       >
                         {piece ? (
                           <span
-                            className={`arena-piece arena-piece-player-${piece.ownerId === state.playerAId ? "a" : "b"}${isOwn ? " arena-piece-own" : ""}`}
+                            className={`arena-piece arena-piece-player-${getPieceColor(state, piece.ownerId)}${isOwn ? " arena-piece-own" : ""}`}
                           >
                             <ArenaPieceIcon piece={piece} isOwn={Boolean(isOwn)} className="arena-icon" />
                           </span>
