@@ -186,12 +186,15 @@ export default function RpsArenaGame() {
                     (isBottomPlayer(piece.ownerId, state)
                       ? row >= BOARD_ROWS - 2
                       : row <= 1);
+                  const isMoveFrom =
+                    state.lastMove?.fromRow === row && state.lastMove?.fromCol === col;
+                  const isMoveTo = state.lastMove?.toRow === row && state.lastMove?.toCol === col;
 
                   return (
                     <button
                       key={`${displayRow}-${displayCol}`}
                       type="button"
-                      className={`arena-cell${isSelected ? " arena-cell-selected" : ""}${isMoveTarget ? " arena-cell-target" : ""}${isHomeRow ? " arena-cell-home" : ""}`}
+                      className={`arena-cell${isSelected ? " arena-cell-selected" : ""}${isMoveTarget ? " arena-cell-target" : ""}${isHomeRow ? " arena-cell-home" : ""}${isMoveFrom ? " arena-cell-move-from" : ""}${isMoveTo ? " arena-cell-move-to" : ""}`}
                       onClick={() => handleCellClick(displayRow, displayCol)}
                       disabled={boardLocked}
                       aria-label={`Клетка ${displayRow + 1}:${displayCol + 1}`}

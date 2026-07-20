@@ -561,6 +561,18 @@ button:disabled {
   background: #f0fdf4;
 }
 
+.arena-cell-move-from {
+  border-color: #d97706;
+  box-shadow: inset 0 0 0 2px #fcd34d;
+  background: #fffbeb;
+}
+
+.arena-cell-move-to {
+  border-color: #b45309;
+  box-shadow: inset 0 0 0 2px #f59e0b;
+  background: #ffedd5;
+}
+
 .arena-piece {
   display: grid;
   place-items: center;

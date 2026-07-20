@@ -42,6 +42,14 @@ export interface TiebreakState extends DuelChoices {
   targetCol: number;
 }
 
+export interface LastMove {
+  fromRow: number;
+  fromCol: number;
+  toRow: number;
+  toCol: number;
+  playerId: string;
+}
+
 export interface RpsArenaState {
   playerAId: string;
   playerBId: string;
@@ -53,6 +61,7 @@ export interface RpsArenaState {
   winnerId: string | null;
   initiative: DuelChoices | null;
   tiebreak: TiebreakState | null;
+  lastMove: LastMove | null;
   options: RpsArenaOptions;
 }
 
@@ -172,6 +181,7 @@ export function createInitialState(
     winnerId: null,
     initiative: skipInitiative ? null : createEmptyDuelChoices(playerAId, playerBId),
     tiebreak: null,
+    lastMove: null,
     options,
   };
 
@@ -283,6 +293,7 @@ export function ensureStateShape(state: RpsArenaState): RpsArenaState {
     ...state,
     options: normalizeArenaOptions(state.options),
     initiative: state.initiative ?? null,
+    lastMove: state.lastMove ?? null,
   };
 }
 
@@ -439,24 +450,32 @@ export function applyMove(
 
   const defender = getPieceAt(state, targetRow, targetCol);
   const nextTurn = getOpponentId(state, playerId) ?? playerId;
+  const lastMove: LastMove = {
+    fromRow: attacker.row,
+    fromCol: attacker.col,
+    toRow: targetRow,
+    toCol: targetCol,
+    playerId,
+  };
 
   if (!defender) {
     return {
       ...state,
       pieces: movePiece(state.pieces, pieceId, targetRow, targetCol),
       currentTurn: nextTurn,
+      lastMove,
     };
   }
 
   if (defender.kind === "flag") {
-    return resolveFlagAttack(state, attacker, defender);
+    return { ...resolveFlagAttack(state, attacker, defender), lastMove };
   }
 
   if (defender.kind === "trap") {
-    return resolveTrapAttack(state, attacker, defender);
+    return { ...resolveTrapAttack(state, attacker, defender), lastMove };
   }
 
-  return resolveSoldierBattle(state, attacker, defender, targetRow, targetCol);
+  return { ...resolveSoldierBattle(state, attacker, defender, targetRow, targetCol), lastMove };
 }
 
 export function submitInitiativeChoice(

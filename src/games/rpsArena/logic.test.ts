@@ -186,6 +186,13 @@ describe("applyMove", () => {
     const next = applyMove(state, "alice", soldier.id, 3, 0);
     expect(next?.currentTurn).toBe("bob");
     expect(next?.pieces.find((piece) => piece.id === soldier.id)).toMatchObject({ row: 3, col: 0 });
+    expect(next?.lastMove).toEqual({
+      fromRow: 4,
+      fromCol: 0,
+      toRow: 3,
+      toCol: 0,
+      playerId: "alice",
+    });
   });
 
   it("captures enemy flag and finishes match", () => {
