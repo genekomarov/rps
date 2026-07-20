@@ -34,7 +34,7 @@ export function getPhaseMeta(phase: SessionPhase | string): PhaseMeta {
     case PHASE.READY:
       return {
         title: "Шаг 2. Выберите роль",
-        hint: "Хост нажимает «Создать приглашение». Гость вставляет или сканирует код хоста.",
+        hint: "Только локальная сеть. Хост нажимает «Создать приглашение». Гость вставляет или сканирует код хоста.",
       };
     case PHASE.HOST_OFFER:
       return {

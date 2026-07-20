@@ -11,7 +11,6 @@ const defaultState: AppState = {
   nicknameDraft: "",
   messages: [],
   peers: [],
-  extendedRelayGather: false,
 };
 
 function hasWindow(): boolean {
@@ -57,12 +56,15 @@ export function loadState(): AppState {
       return { ...defaultState };
     }
 
+    const { extendedRelayGather: _legacyRelay, ...rest } = parsed as Partial<AppState> & {
+      extendedRelayGather?: boolean;
+    };
+
     return {
       ...defaultState,
-      ...parsed,
+      ...rest,
       messages: Array.isArray(parsed.messages) ? (parsed.messages as ChatMessage[]) : [],
       peers: Array.isArray(parsed.peers) ? parsed.peers : [],
-      extendedRelayGather: Boolean(parsed.extendedRelayGather),
     };
   } catch {
     return { ...defaultState };

@@ -88,7 +88,6 @@ export interface AppState {
   nicknameDraft: string;
   messages: ChatMessage[];
   peers: PeerListItem[];
-  extendedRelayGather: boolean;
 }
 
 export type SessionPhase =

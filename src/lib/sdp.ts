@@ -1,14 +1,56 @@
 import type { IceCandidateCounts, SignalDescription } from "../types";
 
-const HANDSHAKE_ICE_LIMITS: Record<string, number> = {
-  host: 8,
-  srflx: 16,
-  relay: Infinity,
-};
+const HANDSHAKE_HOST_LIMIT = 1;
 const SKIP_LINE_PREFIXES = ["a=extmap:", "a=msid:", "a=ssrc:", "a=rtcp-fb:"];
+const IPV4_RE = /^(?:\d{1,3}\.){3}\d{1,3}$/;
 
 function splitSdpLines(sdp: string): string[] {
   return sdp.split(/\r?\n/).map((line) => line.replace(/\r/g, ""));
+}
+
+function isIpv4(address: string): boolean {
+  return IPV4_RE.test(address);
+}
+
+function isPrivateIpv4(address: string): boolean {
+  if (!isIpv4(address)) return false;
+  const [a, b] = address.split(".").map(Number);
+  if (a === 10) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  return false;
+}
+
+/** Higher score = better LAN handshake candidate (short + directly reachable). */
+function scoreHostCandidate(address: string, priority: number): number {
+  let score = priority;
+  if (isIpv4(address)) {
+    score += 1_000_000_000;
+    if (isPrivateIpv4(address)) score += 100_000_000;
+    if (address.startsWith("169.254.")) score -= 50_000_000;
+  } else if (address.includes(":")) {
+    score += 500_000_000;
+  } else if (address.toLowerCase().endsWith(".local")) {
+    score += 100_000_000;
+  }
+  return score;
+}
+
+function parseCandidateLine(line: string): {
+  typ: string;
+  address: string;
+  priority: number;
+} | null {
+  if (!line.startsWith("a=candidate:")) return null;
+  const parts = line.slice("a=candidate:".length).split(/\s+/);
+  if (parts.length < 8) return null;
+
+  const typIndex = parts.indexOf("typ");
+  const typ = typIndex >= 0 ? parts[typIndex + 1] || "host" : "host";
+  const priority = Number(parts[3]) || 0;
+  const address = parts[4] || "";
+
+  return { typ, address, priority };
 }
 
 export function countIceCandidatesInSdp(sdp: string | null | undefined): IceCandidateCounts {
@@ -46,31 +88,39 @@ export function normalizeSdp(sdp: string | null | undefined): string | null | un
 export function trimSdp(sdp: string | null | undefined): string | null | undefined {
   if (!sdp) return sdp;
 
-  const iceCounts: Record<string, number> = { host: 0, srflx: 0, relay: 0 };
   const lines = splitSdpLines(sdp);
+  const kept: string[] = [];
+  const hostCandidates: { line: string; score: number }[] = [];
 
-  const trimmed = lines.filter((line) => {
-    if (!line) return false;
+  for (const line of lines) {
+    if (!line) continue;
 
     if (SKIP_LINE_PREFIXES.some((prefix) => line.startsWith(prefix))) {
-      return false;
+      continue;
     }
 
     if (!line.startsWith("a=candidate:")) {
-      return true;
+      kept.push(line);
+      continue;
     }
 
-    const typ = line.match(/ typ ([a-z]+)/)?.[1] || "host";
-    const limit = HANDSHAKE_ICE_LIMITS[typ] ?? HANDSHAKE_ICE_LIMITS.host;
-    if (Number.isFinite(limit) && iceCounts[typ] >= limit) {
-      return false;
+    const parsed = parseCandidateLine(line);
+    if (!parsed || parsed.typ !== "host") {
+      continue;
     }
 
-    iceCounts[typ] += 1;
-    return true;
-  });
+    hostCandidates.push({
+      line,
+      score: scoreHostCandidate(parsed.address, parsed.priority),
+    });
+  }
 
-  return normalizeSdp(trimmed.join("\r\n"));
+  hostCandidates
+    .sort((a, b) => b.score - a.score)
+    .slice(0, HANDSHAKE_HOST_LIMIT)
+    .forEach((candidate) => kept.push(candidate.line));
+
+  return normalizeSdp(kept.join("\r\n"));
 }
 
 export function packSignalDescription(

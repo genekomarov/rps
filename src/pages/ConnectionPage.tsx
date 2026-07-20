@@ -17,8 +17,6 @@ export default function ConnectionPage() {
     busyLabel,
     logEntries,
     diagnostics,
-    extendedRelayGather,
-    setExtendedRelayGather,
     phase,
     phaseMeta,
     isConnected,
@@ -39,7 +37,7 @@ export default function ConnectionPage() {
         <h1>Подключение</h1>
         <p className="muted">
           Управление P2P-соединением. Здесь можно создать приглашение, принять код партнёра или
-          разорвать сессию.
+          разорвать сессию. Работает только в локальной сети.
         </p>
         <p className="muted">ID: {clientId}</p>
         <label className="field">
@@ -64,17 +62,6 @@ export default function ConnectionPage() {
             Сбросить сессию
           </button>
         </div>
-        <label className="checkbox-field">
-          <input
-            type="checkbox"
-            checked={extendedRelayGather}
-            onChange={(event) => setExtendedRelayGather(event.target.checked)}
-            disabled={busy}
-          />
-          <span>
-            Расширенный поиск relay (до 25 с) — для подключения между разными сетями (телефон + ПК)
-          </span>
-        </label>
         {error ? <p className="error">{error}</p> : null}
       </section>
 

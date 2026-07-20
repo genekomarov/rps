@@ -50,8 +50,6 @@ export interface SessionContextValue {
   busyLabel: string;
   logEntries: LogEntry[];
   diagnostics: PeerDiagnostic[];
-  extendedRelayGather: boolean;
-  setExtendedRelayGather: (value: boolean) => void;
   phase: SessionPhase;
   phaseMeta: PhaseMeta;
   isConnected: boolean;
@@ -96,9 +94,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [busyLabel, setBusyLabel] = useState("");
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
   const [diagnostics, setDiagnostics] = useState<PeerDiagnostic[]>([]);
-  const [extendedRelayGather, setExtendedRelayGather] = useState(
-    Boolean(stored.extendedRelayGather),
-  );
 
   const meshRef = useRef<WebRtcMesh | null>(null);
   const resettingRef = useRef(false);
@@ -143,10 +138,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [messages]);
 
   useEffect(() => {
-    saveState({ extendedRelayGather });
-  }, [extendedRelayGather]);
-
-  useEffect(() => {
     if (!isConnected) return;
     setHostOfferCode("");
     setAnswerCode("");
@@ -160,7 +151,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const mesh = new WebRtcMesh({
       selfId: clientId,
       selfName: nickname,
-      extendedRelayGather,
       onPeerListChange: setPeers,
       onMessage: (nextMessage) => {
         if (messageIdsRef.current.has(nextMessage.id)) return;
@@ -200,7 +190,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       mesh.dispose();
       meshRef.current = null;
     };
-  }, [clientId, nickname, appendLog, extendedRelayGather]);
+  }, [clientId, nickname, appendLog]);
 
   const saveNickname = useCallback(() => {
     const normalized = nicknameDraft.trim();
@@ -349,8 +339,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       busyLabel,
       logEntries,
       diagnostics,
-      extendedRelayGather,
-      setExtendedRelayGather,
       phase,
       phaseMeta,
       isConnected,
@@ -379,7 +367,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       busyLabel,
       logEntries,
       diagnostics,
-      extendedRelayGather,
       phase,
       phaseMeta,
       isConnected,

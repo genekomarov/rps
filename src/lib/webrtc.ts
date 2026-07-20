@@ -24,15 +24,8 @@ import {
   toSessionDescription,
 } from "./sdp";
 
-interface IceGatherConfig {
-  primaryTimeoutMs: number;
-  fallbackMaxMs: number;
-  waitForRelay: boolean;
-}
-
 interface GatherIceOptions {
   force?: boolean;
-  gatherConfig?: IceGatherConfig;
 }
 
 interface MeshPeer {
@@ -67,7 +60,6 @@ interface ForwardSignalPayload {
 export interface WebRtcMeshOptions {
   selfId: string;
   selfName: string;
-  extendedRelayGather?: boolean;
   onPeerListChange: (peers: PeerListItem[]) => void;
   onMessage: (message: ChatMessage) => void;
   onGameMessage?: (message: GameMessagePayload) => void;
@@ -79,59 +71,17 @@ export interface WebRtcMeshOptions {
   getHistory: () => ChatMessage[];
 }
 
+/** LAN-only: no STUN/TURN — host candidates only. */
 const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:global.stun.twilio.com:3478" },
-    { urls: "stun:stun.relay.metered.ca:443" },
-    {
-      urls: [
-        "turn:openrelay.metered.ca:80",
-        "turn:openrelay.metered.ca:443",
-        "turn:openrelay.metered.ca:443?transport=tcp",
-        "turns:openrelay.metered.ca:443",
-      ],
-      username: "openrelayproject",
-      credential: "openrelayproject",
-    },
-    {
-      urls: [
-        "turn:relay.metered.ca:80",
-        "turn:relay.metered.ca:443",
-        "turn:relay.metered.ca:443?transport=tcp",
-      ],
-      username: "openrelayproject",
-      credential: "openrelayproject",
-    },
-  ],
-  iceTransportPolicy: "all",
-  iceCandidatePoolSize: 10,
+  iceServers: [],
+  iceCandidatePoolSize: 0,
 };
 
 const DATA_CHANNEL_LABEL = "chat";
-const ICE_GATHER_TIMEOUT_MS = 8000;
-const ICE_GATHER_EXTENDED_MAX_MS = 25000;
+const ICE_GATHER_TIMEOUT_MS = 5000;
 const ICE_RESTART_DELAY_MS = 2500;
 const ICE_RESTART_MAX_ATTEMPTS = 2;
 const DATA_CHANNEL_LOG_INTERVAL_MS = 30000;
-
-const DEFAULT_ICE_GATHER_CONFIG = {
-  primaryTimeoutMs: ICE_GATHER_TIMEOUT_MS,
-  fallbackMaxMs: ICE_GATHER_TIMEOUT_MS,
-  waitForRelay: false,
-};
-
-function buildIceGatherConfig(extendedRelayGather?: boolean): IceGatherConfig {
-  if (!extendedRelayGather) {
-    return { ...DEFAULT_ICE_GATHER_CONFIG };
-  }
-
-  return {
-    primaryTimeoutMs: ICE_GATHER_TIMEOUT_MS,
-    fallbackMaxMs: ICE_GATHER_EXTENDED_MAX_MS,
-    waitForRelay: true,
-  };
-}
 
 function logIceCandidateSummary(
   pc: RTCPeerConnection,
@@ -141,27 +91,12 @@ function logIceCandidateSummary(
 ) {
   const counts = countIceCandidatesInSdp(pc.localDescription?.sdp);
   log(level, `${prefix}: ${formatIceCandidateCounts(counts)}`);
-  if (counts.total === 0) {
-    log("warn", "ICE: в SDP нет кандидатов — соединение между разными сетями, скорее всего, не установится");
-  } else if (counts.relay === 0) {
+  if (counts.host === 0) {
     log(
       "warn",
-      "ICE: relay-кандидатов нет — между телефоном и ПК соединение часто не устанавливается без TURN",
+      "ICE: нет host-кандидатов — в локальной сети соединение, скорее всего, не установится",
     );
-  } else if (counts.srflx === 0) {
-    log("warn", "ICE: только host и relay — srflx не получен, но relay есть");
   }
-}
-
-function shouldWaitForRelay(
-  pc: RTCPeerConnection,
-  elapsedMs: number,
-  gatherConfig: IceGatherConfig,
-) {
-  if (!gatherConfig.waitForRelay) return false;
-  const counts = countIceCandidatesInSdp(pc.localDescription?.sdp);
-  if (counts.relay > 0) return false;
-  return elapsedMs < gatherConfig.fallbackMaxMs;
 }
 
 async function waitForIceGatheringComplete(
@@ -169,34 +104,23 @@ async function waitForIceGatheringComplete(
   log: (level: LogLevel, message: string) => void,
   options: GatherIceOptions = {},
 ) {
-  const gatherConfig = options.gatherConfig ?? DEFAULT_ICE_GATHER_CONFIG;
   const force = options.force ?? false;
   const countsNow = countIceCandidatesInSdp(pc.localDescription?.sdp);
 
-  if (
-    !force &&
-    pc.iceGatheringState === "complete" &&
-    countsNow.total > 0 &&
-    (countsNow.relay > 0 || !gatherConfig.waitForRelay)
-  ) {
+  if (!force && pc.iceGatheringState === "complete" && countsNow.host > 0) {
     logIceCandidateSummary(pc, log, "ICE: сбор завершён");
     return;
   }
 
-  const gatherHint = gatherConfig.waitForRelay
-    ? `до ${gatherConfig.primaryTimeoutMs / 1000} с, до ${gatherConfig.fallbackMaxMs / 1000} с для relay`
-    : `до ${gatherConfig.primaryTimeoutMs / 1000} с`;
-  log("info", `ICE: сбор сетевых кандидатов (${gatherHint})...`);
+  log("info", `ICE: сбор host-кандидатов (LAN, до ${ICE_GATHER_TIMEOUT_MS / 1000} с)...`);
 
   await new Promise<void>((resolve, reject) => {
     let done = false;
     const startedAt = Date.now();
-    let relayExtended = false;
     let sawEndOfCandidates = false;
 
     function cleanup() {
-      clearTimeout(primaryTimer);
-      clearTimeout(maxTimer);
+      clearTimeout(timeoutTimer);
       clearInterval(pollTimer);
       pc.removeEventListener("icecandidate", onIceCandidate);
       pc.removeEventListener("icegatheringstatechange", onGatheringChange);
@@ -222,22 +146,7 @@ async function waitForIceGatheringComplete(
       const elapsed = Date.now() - startedAt;
       const counts = countIceCandidatesInSdp(pc.localDescription?.sdp);
 
-      if (shouldWaitForRelay(pc, elapsed, gatherConfig)) {
-        if (!relayExtended) {
-          relayExtended = true;
-          log(
-            "info",
-            `ICE: relay ещё нет — продлеваем сбор до ${gatherConfig.fallbackMaxMs / 1000} с (нужен для разных сетей)`,
-          );
-        }
-        return;
-      }
-
-      if (
-        counts.total === 0 &&
-        !sawEndOfCandidates &&
-        elapsed < gatherConfig.fallbackMaxMs
-      ) {
+      if (counts.host === 0 && !sawEndOfCandidates && elapsed < ICE_GATHER_TIMEOUT_MS) {
         return;
       }
 
@@ -256,19 +165,12 @@ async function waitForIceGatheringComplete(
       setTimeout(() => tryFinish("ICE: сбор завершён", "info"), 200);
     }
 
-    const primaryTimer = setTimeout(() => {
+    const timeoutTimer = setTimeout(() => {
       tryFinish(
-        `ICE: таймаут ${gatherConfig.primaryTimeoutMs} мс — используем уже собранные кандидаты`,
+        `ICE: таймаут ${ICE_GATHER_TIMEOUT_MS} мс — используем уже собранные кандидаты`,
         "warn",
       );
-    }, gatherConfig.primaryTimeoutMs);
-
-    const maxTimer = setTimeout(() => {
-      tryFinish(
-        `ICE: лимит ${gatherConfig.fallbackMaxMs} мс — используем уже собранные кандидаты`,
-        "warn",
-      );
-    }, gatherConfig.fallbackMaxMs);
+    }, ICE_GATHER_TIMEOUT_MS);
 
     const pollTimer = setInterval(() => {
       if (pc.iceGatheringState === "complete") {
@@ -312,7 +214,6 @@ export class WebRtcMesh {
   onDiagnostics?: (diagnostics: PeerDiagnostic[]) => void;
   onHandshakeOfferRefresh?: (offer: HostOfferBody) => void;
   getHistory: () => ChatMessage[];
-  iceGatherConfig: IceGatherConfig;
   peerMap: Map<string, MeshPeer>;
   seenEnvelopeIds: Set<string>;
   pendingInvitePeerId: string | null;
@@ -330,7 +231,6 @@ export class WebRtcMesh {
     this.onDiagnostics = options.onDiagnostics;
     this.onHandshakeOfferRefresh = options.onHandshakeOfferRefresh;
     this.getHistory = options.getHistory;
-    this.iceGatherConfig = buildIceGatherConfig(options.extendedRelayGather);
 
     this.peerMap = new Map();
     this.seenEnvelopeIds = new Set();
@@ -342,11 +242,8 @@ export class WebRtcMesh {
     this.onLog?.(level, message);
   }
 
-  gatherIce(pc: RTCPeerConnection, options: Omit<GatherIceOptions, "gatherConfig"> = {}) {
-    return waitForIceGatheringComplete(pc, this.log.bind(this), {
-      ...options,
-      gatherConfig: this.iceGatherConfig,
-    });
+  gatherIce(pc: RTCPeerConnection, options: GatherIceOptions = {}) {
+    return waitForIceGatheringComplete(pc, this.log.bind(this), options);
   }
 
   setSelfName(nextName: string) {

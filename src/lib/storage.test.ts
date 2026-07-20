@@ -58,7 +58,6 @@ describe("storage", () => {
       nicknameDraft: "",
       messages: [],
       peers: [],
-      extendedRelayGather: false,
     });
   });
 
@@ -76,7 +75,6 @@ describe("storage", () => {
         },
       ],
       peers: [{ id: "p1", name: "Peer" }],
-      extendedRelayGather: true,
     });
 
     expect(loadState()).toMatchObject({
@@ -84,8 +82,21 @@ describe("storage", () => {
       nickname: "Alice",
       messages: [{ id: "m1" }],
       peers: [{ id: "p1", name: "Peer" }],
-      extendedRelayGather: true,
     });
+  });
+
+  it("drops legacy extendedRelayGather on load", () => {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        nickname: "Alice",
+        extendedRelayGather: true,
+      }),
+    );
+
+    expect(loadState()).toMatchObject({ nickname: "Alice" });
+    expect(loadState()).not.toHaveProperty("extendedRelayGather");
   });
 
   it("resets storage completely", () => {

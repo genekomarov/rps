@@ -71,29 +71,43 @@ describe("normalizeSdp", () => {
 });
 
 describe("trimSdp", () => {
-  it("removes skipped attribute lines", () => {
+  it("removes skipped attribute lines and non-host candidates", () => {
     const trimmed = trimSdp(SAMPLE_SDP);
     expect(trimmed).not.toContain("a=extmap:");
+    expect(trimmed).not.toContain("typ srflx");
+    expect(trimmed).not.toContain("typ relay");
     expect(trimmed).toContain("typ host");
   });
 
-  it("limits host and srflx candidates", () => {
-    const manyHosts = Array.from({ length: 12 }, (_, index) =>
-      `a=candidate:${index} 1 UDP 1 192.168.0.${index} 1 typ host`,
-    ).join("\r\n");
-    const sdp = `v=0\r\n${manyHosts}`;
+  it("keeps a single best private IPv4 host candidate", () => {
+    const sdp = [
+      "v=0",
+      "a=candidate:1 1 UDP 100 169.254.1.1 1 typ host",
+      "a=candidate:2 1 UDP 200 abcdef.local 1 typ host",
+      "a=candidate:3 1 UDP 150 192.168.1.10 1 typ host",
+      "a=candidate:4 1 UDP 180 2001:db8::1 1 typ host",
+    ].join("\r\n");
 
-    const hostCount = countIceCandidatesInSdp(trimSdp(sdp)).host;
-    expect(hostCount).toBe(8);
+    const trimmed = trimSdp(sdp)!;
+    const counts = countIceCandidatesInSdp(trimmed);
+    expect(counts).toEqual({ host: 1, srflx: 0, relay: 0, total: 1 });
+    expect(trimmed).toContain("192.168.1.10");
+    expect(trimmed).not.toContain("abcdef.local");
+    expect(trimmed).not.toContain("2001:db8::1");
   });
 
-  it("keeps all relay candidates", () => {
+  it("drops all relay and srflx candidates", () => {
     const relays = Array.from({ length: 5 }, (_, index) =>
       `a=candidate:r${index} 1 UDP 1 relay${index}.test 1 typ relay`,
     ).join("\r\n");
-    const sdp = `v=0\r\n${relays}`;
+    const sdp = `v=0\r\n${relays}\r\na=candidate:s1 1 UDP 1 1.2.3.4 1 typ srflx`;
 
-    expect(countIceCandidatesInSdp(trimSdp(sdp)).relay).toBe(5);
+    expect(countIceCandidatesInSdp(trimSdp(sdp))).toEqual({
+      host: 0,
+      srflx: 0,
+      relay: 0,
+      total: 0,
+    });
   });
 });
 
@@ -106,6 +120,7 @@ describe("packSignalDescription", () => {
 
     expect(packed.type).toBe("offer");
     expect(packed.sdp).not.toContain("a=extmap:");
+    expect(countIceCandidatesInSdp(packed.sdp).total).toBe(1);
   });
 
   it("returns falsy description unchanged", () => {
