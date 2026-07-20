@@ -1,14 +1,8 @@
 import { useMemo } from "react";
 import { buildHash } from "../lib/hashRouter";
-import {
-  BOARD_COLS,
-  BOARD_ROWS,
-  getLegalMoves,
-  isBottomPlayer,
-  weaponLabel,
-  type Weapon,
-} from "./rpsArena/logic";
-import { ArenaPieceIcon, WeaponIcon } from "./rpsArena/icons";
+import { BOARD_COLS, BOARD_ROWS, getLegalMoves, isBottomPlayer } from "./rpsArena/logic";
+import { ArenaPieceIcon } from "./rpsArena/icons";
+import { ArenaDuel } from "./rpsArena/ArenaDuel";
 import { useRpsArena } from "./rpsArena/useRpsArena";
 
 function statusMessage(
@@ -16,6 +10,11 @@ function statusMessage(
   clientId: string,
   isMyTurn: boolean,
 ): string {
+  if (state.phase === "initiative") {
+    if (state.initiative?.choices[clientId]) return "Ожидаем выбор соперника…";
+    return "Дуэль за первый ход: выберите камень, ножницы или бумагу.";
+  }
+
   if (state.phase === "setup") {
     if (state.setupReady[clientId]) return "Ожидаем расстановку соперника…";
     return "Назначьте знамя и ловушку, затем нажмите «Готов».";
@@ -46,13 +45,13 @@ export default function RpsArenaGame() {
     setSpecial,
     readySetup,
     moveSelectedPiece,
-    chooseTiebreak,
+    chooseDuel,
     updateOptions,
     options,
     playNextRound,
     clearGameState,
     isMyTurn,
-    myTiebreakChoice,
+    showDuel,
   } = useRpsArena();
 
   const legalMoves = useMemo(() => {
@@ -72,6 +71,9 @@ export default function RpsArenaGame() {
 
   const canEditSetup = Boolean(state?.phase === "setup" && !state.setupReady[clientId]);
   const shouldFlipBoard = Boolean(state && !isBottomPlayer(clientId, state));
+  const boardLocked = Boolean(
+    state && (state.phase === "initiative" || state.phase === "tiebreak" || state.phase === "finished"),
+  );
 
   function toModelCoords(displayRow: number, displayCol: number): { row: number; col: number } {
     if (!shouldFlipBoard) {
@@ -120,6 +122,17 @@ export default function RpsArenaGame() {
     }
     setSpecial(pieceId, "soldier");
   }
+
+  const duelCopy =
+    state?.phase === "initiative"
+      ? {
+          title: "Кто ходит первым",
+          description: "Победитель дуэли получает право первого хода в партии.",
+        }
+      : {
+          title: "Дуэль",
+          description: "Одинаковое оружие — выберите жест для перестрелки.",
+        };
 
   return (
     <>
@@ -180,7 +193,7 @@ export default function RpsArenaGame() {
                       type="button"
                       className={`arena-cell${isSelected ? " arena-cell-selected" : ""}${isMoveTarget ? " arena-cell-target" : ""}${isHomeRow ? " arena-cell-home" : ""}`}
                       onClick={() => handleCellClick(displayRow, displayCol)}
-                      disabled={state.phase === "tiebreak" || state.phase === "finished"}
+                      disabled={boardLocked}
                       aria-label={`Клетка ${displayRow + 1}:${displayCol + 1}`}
                     >
                       {piece ? (
@@ -197,6 +210,14 @@ export default function RpsArenaGame() {
             </div>
           </section>
 
+          {showDuel ? (
+            <ArenaDuel
+              title={duelCopy.title}
+              description={duelCopy.description}
+              onChoose={chooseDuel}
+            />
+          ) : null}
+
           {canEditSetup ? (
             <section className="card arena-setup">
               <h2>Расстановка</h2>
@@ -208,21 +229,6 @@ export default function RpsArenaGame() {
                 <button type="button" onClick={readySetup}>
                   Готов
                 </button>
-              </div>
-            </section>
-          ) : null}
-
-          {state.phase === "tiebreak" && !myTiebreakChoice ? (
-            <section className="card arena-tiebreak">
-              <h2>Дуэль</h2>
-              <p className="muted">Одинаковое оружие — выберите жест для перестрелки.</p>
-              <div className="actions">
-                {(["rock", "paper", "scissors"] as Weapon[]).map((weapon) => (
-                  <button key={weapon} type="button" className="arena-tiebreak-button" onClick={() => chooseTiebreak(weapon)}>
-                    <WeaponIcon weapon={weapon} className="arena-icon" />
-                    {weaponLabel(weapon)}
-                  </button>
-                ))}
               </div>
             </section>
           ) : null}

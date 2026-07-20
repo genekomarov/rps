@@ -3,15 +3,30 @@ import {
   applyMove,
   assignPlayers,
   assignSpecial,
+  clearMatch,
   compareWeapons,
   createInitialState,
   getLegalMoves,
   markSetupReady,
   startNextRound,
+  submitInitiativeChoice,
   submitTiebreakChoice,
+  type RpsArenaOptions,
+  type RpsArenaState,
 } from "./logic";
 
-function readyBothPlayers(state: ReturnType<typeof createInitialState>) {
+function createMatchState(
+  firstPlayerId = "alice",
+  options?: RpsArenaOptions,
+  random = () => 0.1,
+): RpsArenaState {
+  return createInitialState("alice", "bob", random, {
+    firstPlayerId,
+    options,
+  });
+}
+
+function readyBothPlayers(state: RpsArenaState) {
   const playerA = state.playerAId;
   const playerB = state.playerBId;
 
@@ -35,7 +50,7 @@ describe("compareWeapons", () => {
 
 describe("assignSpecial", () => {
   it("assigns flag and trap on separate pieces", () => {
-    const state = createInitialState("alice", "bob", () => 0.1);
+    const state = createMatchState();
     const flagPiece = state.pieces.find((piece) => piece.ownerId === "alice" && piece.id === "alice-p12");
     const trapPiece = state.pieces.find((piece) => piece.ownerId === "alice" && piece.id === "alice-p13");
     expect(flagPiece).toBeTruthy();
@@ -49,7 +64,7 @@ describe("assignSpecial", () => {
   });
 
   it("restores soldier weapon after unsetting special", () => {
-    const state = createInitialState("alice", "bob", () => 0.1);
+    const state = createMatchState();
     const soldier = state.pieces.find(
       (piece) => piece.ownerId === "alice" && piece.kind === "soldier" && piece.weapon !== null,
     )!;
@@ -69,22 +84,76 @@ describe("createInitialState", () => {
     const state = createInitialState("alice", "bob", () => 0.1);
     expect(state.pieces.every((piece) => piece.weapon !== null)).toBe(true);
   });
+
+  it("starts with initiative duel by default", () => {
+    const state = createInitialState("alice", "bob", () => 0.1);
+    expect(state.phase).toBe("initiative");
+    expect(state.initiative?.choices).toEqual({ alice: null, bob: null });
+  });
+
+  it("skips initiative when first player is provided", () => {
+    const state = createMatchState("bob");
+    expect(state.phase).toBe("setup");
+    expect(state.currentTurn).toBe("bob");
+    expect(state.initiative).toBeNull();
+  });
+});
+
+describe("initiative", () => {
+  it("gives first turn to initiative duel winner", () => {
+    let state = createInitialState("alice", "bob", () => 0.1);
+    state = submitInitiativeChoice(state, "alice", "rock")!;
+    state = submitInitiativeChoice(state, "bob", "scissors")!;
+
+    expect(state.phase).toBe("setup");
+    expect(state.currentTurn).toBe("alice");
+    expect(state.initiative).toBeNull();
+  });
+
+  it("gives first turn to player B when they win initiative", () => {
+    let state = createInitialState("alice", "bob", () => 0.1);
+    state = submitInitiativeChoice(state, "alice", "rock")!;
+    state = submitInitiativeChoice(state, "bob", "paper")!;
+
+    expect(state.phase).toBe("setup");
+    expect(state.currentTurn).toBe("bob");
+  });
+
+  it("resets choices on initiative tie", () => {
+    let state = createInitialState("alice", "bob", () => 0.1);
+    state = submitInitiativeChoice(state, "alice", "rock")!;
+    state = submitInitiativeChoice(state, "bob", "rock")!;
+
+    expect(state.phase).toBe("initiative");
+    expect(state.initiative?.choices).toEqual({ alice: null, bob: null });
+  });
+
+  it("keeps first player after both complete setup", () => {
+    let state = createInitialState("alice", "bob", () => 0.1);
+    state = submitInitiativeChoice(state, "alice", "scissors")!;
+    state = submitInitiativeChoice(state, "bob", "paper")!;
+    expect(state.currentTurn).toBe("alice");
+
+    state = readyBothPlayers(state);
+    expect(state.phase).toBe("playing");
+    expect(state.currentTurn).toBe("alice");
+  });
 });
 
 describe("setup", () => {
-  it("starts in setup with 28 pieces", () => {
-    const state = createInitialState("alice", "bob", () => 0.1);
+  it("starts in setup with 28 pieces when first player is set", () => {
+    const state = createMatchState();
     expect(state.phase).toBe("setup");
     expect(state.pieces).toHaveLength(28);
   });
 
   it("requires flag and trap before ready", () => {
-    const state = createInitialState("alice", "bob", () => 0.1);
+    const state = createMatchState();
     expect(markSetupReady(state, "alice")).toBeNull();
   });
 
   it("ready flow step by step", () => {
-    const state = createInitialState("alice", "bob", () => 0.1);
+    const state = createMatchState();
     const withFlag = assignSpecial(state, "alice", "alice-p12", "flag");
     const withTrap = assignSpecial(withFlag!, "alice", "alice-p13", "trap");
     const aliceReady = markSetupReady(withTrap!, "alice");
@@ -101,15 +170,15 @@ describe("setup", () => {
   });
 
   it("starts playing when both players are ready", () => {
-    const state = readyBothPlayers(createInitialState("alice", "bob", () => 0.1));
+    const state = readyBothPlayers(createMatchState("bob"));
     expect(state.phase).toBe("playing");
-    expect(state.currentTurn).toBe("alice");
+    expect(state.currentTurn).toBe("bob");
   });
 });
 
 describe("applyMove", () => {
   it("moves soldier orthogonally on empty cell", () => {
-    const state = readyBothPlayers(createInitialState("alice", "bob", () => 0.1));
+    const state = readyBothPlayers(createMatchState());
     const soldier = state.pieces.find(
       (piece) => piece.ownerId === "alice" && piece.kind === "soldier" && piece.row === 4 && piece.col === 0,
     )!;
@@ -120,7 +189,7 @@ describe("applyMove", () => {
   });
 
   it("captures enemy flag and finishes match", () => {
-    let state = readyBothPlayers(createInitialState("alice", "bob", () => 0.1));
+    let state = readyBothPlayers(createMatchState());
     const attacker = state.pieces.find((piece) => piece.ownerId === "alice" && piece.kind === "soldier")!;
     const enemyFlag = state.pieces.find((piece) => piece.ownerId === "bob" && piece.kind === "flag")!;
 
@@ -139,7 +208,7 @@ describe("applyMove", () => {
   });
 
   it("removes attacker on trap and reveals trap", () => {
-    let state = readyBothPlayers(createInitialState("alice", "bob", () => 0.1));
+    let state = readyBothPlayers(createMatchState());
     const attacker = state.pieces.find((piece) => piece.ownerId === "alice" && piece.kind === "soldier")!;
     const enemyTrap = state.pieces.find((piece) => piece.ownerId === "bob" && piece.kind === "trap")!;
 
@@ -163,7 +232,7 @@ describe("applyMove", () => {
 
 describe("tiebreak", () => {
   it("keeps original weapon after duel when option is off", () => {
-    let state = readyBothPlayers(createInitialState("alice", "bob", () => 0.1));
+    let state = readyBothPlayers(createMatchState());
     const attacker = state.pieces.find((piece) => piece.ownerId === "alice" && piece.kind === "soldier")!;
     const defender = state.pieces.find((piece) => piece.ownerId === "bob" && piece.kind === "soldier")!;
 
@@ -194,9 +263,7 @@ describe("tiebreak", () => {
   });
 
   it("changes winner weapon after duel when option is on", () => {
-    let state = readyBothPlayers(
-      createInitialState("alice", "bob", () => 0.1, { changeWeaponAfterDuel: true }),
-    );
+    let state = readyBothPlayers(createMatchState("alice", { changeWeaponAfterDuel: true }));
     const attacker = state.pieces.find((piece) => piece.ownerId === "alice" && piece.kind === "soldier")!;
     const defender = state.pieces.find((piece) => piece.ownerId === "bob" && piece.kind === "soldier")!;
 
@@ -224,16 +291,16 @@ describe("tiebreak", () => {
   });
 
   it("changes defender weapon after winning duel when option is on", () => {
-    let state = readyBothPlayers(
-      createInitialState("alice", "bob", () => 0.1, { changeWeaponAfterDuel: true }),
-    );
+    let state = readyBothPlayers(createMatchState("alice", { changeWeaponAfterDuel: true }));
     const attacker = state.pieces.find((piece) => piece.ownerId === "alice" && piece.kind === "soldier")!;
     const defender = state.pieces.find((piece) => piece.ownerId === "bob" && piece.kind === "soldier")!;
 
     state = {
       ...state,
       pieces: state.pieces.map((piece) => {
-        if (piece.id === attacker.id) return { ...piece, weapon: "scissors", row: defender.row + 1, col: defender.col };
+        if (piece.id === attacker.id) {
+          return { ...piece, weapon: "scissors", row: defender.row + 1, col: defender.col };
+        }
         if (piece.id === defender.id) return { ...piece, weapon: "scissors" };
         return piece;
       }),
@@ -251,7 +318,7 @@ describe("tiebreak", () => {
   });
 
   it("reveals defender after winning battle", () => {
-    let state = readyBothPlayers(createInitialState("alice", "bob", () => 0.1));
+    let state = readyBothPlayers(createMatchState());
     const attacker = state.pieces.find((piece) => piece.ownerId === "alice" && piece.kind === "soldier")!;
     const defender = state.pieces.find((piece) => piece.ownerId === "bob" && piece.kind === "soldier")!;
 
@@ -271,20 +338,25 @@ describe("tiebreak", () => {
 });
 
 describe("startNextRound", () => {
-  it("keeps score but resets board", () => {
-    let state = readyBothPlayers(createInitialState("alice", "bob", () => 0.1));
-    state = { ...state, phase: "finished", winnerId: "alice", score: { wins: { alice: 2, bob: 0 } } };
+  it("keeps score and lets previous winner go first", () => {
+    let state = readyBothPlayers(createMatchState("bob"));
+    state = {
+      ...state,
+      phase: "finished",
+      winnerId: "bob",
+      score: { wins: { alice: 1, bob: 2 } },
+    };
 
     const next = startNextRound(state, () => 0.2);
     expect(next.phase).toBe("setup");
-    expect(next.score.wins.alice).toBe(2);
+    expect(next.currentTurn).toBe("bob");
+    expect(next.initiative).toBeNull();
+    expect(next.score.wins).toEqual({ alice: 1, bob: 2 });
     expect(next.pieces).toHaveLength(28);
   });
 
   it("preserves arena options between rounds", () => {
-    let state = readyBothPlayers(
-      createInitialState("alice", "bob", () => 0.1, { changeWeaponAfterDuel: true }),
-    );
+    let state = readyBothPlayers(createMatchState("alice", { changeWeaponAfterDuel: true }));
     state = { ...state, phase: "finished", winnerId: "alice" };
 
     const next = startNextRound(state, () => 0.2);
@@ -292,9 +364,27 @@ describe("startNextRound", () => {
   });
 });
 
+describe("clearMatch", () => {
+  it("resets score and starts initiative duel again", () => {
+    let state = readyBothPlayers(createMatchState("bob"));
+    state = {
+      ...state,
+      phase: "finished",
+      winnerId: "bob",
+      score: { wins: { alice: 1, bob: 2 } },
+    };
+
+    const next = clearMatch(state, () => 0.2);
+    expect(next.phase).toBe("initiative");
+    expect(next.initiative?.choices).toEqual({ alice: null, bob: null });
+    expect(next.score.wins).toEqual({ alice: 0, bob: 0 });
+    expect(next.options).toEqual(state.options);
+  });
+});
+
 describe("getLegalMoves", () => {
   it("returns only orthogonal moves", () => {
-    const state = readyBothPlayers(createInitialState("alice", "bob", () => 0.1));
+    const state = readyBothPlayers(createMatchState());
     const soldier = state.pieces.find((piece) => piece.ownerId === "alice" && piece.row === 4 && piece.col === 3)!;
     const moves = getLegalMoves(state, "alice", soldier.id);
     expect(moves).toContainEqual({ row: 3, col: 3 });

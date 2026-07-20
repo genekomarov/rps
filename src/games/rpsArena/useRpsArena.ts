@@ -5,6 +5,7 @@ import {
   assignPlayers,
   assignSpecial,
   applyMove,
+  clearMatch,
   createInitialState,
   ensureStateShape,
   isStateForPlayers,
@@ -12,6 +13,7 @@ import {
   markSetupReady,
   setArenaOptions,
   startNextRound,
+  submitInitiativeChoice,
   submitTiebreakChoice,
   type PieceKind,
   type RpsArenaOptions,
@@ -65,7 +67,9 @@ export function useRpsArena() {
   const bootstrapState = useCallback(() => {
     if (!players || stateRef.current) return;
     publishState(
-      createInitialState(players.playerAId, players.playerBId, Math.random, loadArenaOptions()),
+      createInitialState(players.playerAId, players.playerBId, Math.random, {
+        options: loadArenaOptions(),
+      }),
     );
   }, [players, publishState]);
 
@@ -177,10 +181,14 @@ export function useRpsArena() {
     [clientId, publishState, selectedPieceId],
   );
 
-  const chooseTiebreak = useCallback(
+  const chooseDuel = useCallback(
     (weapon: Weapon) => {
       if (!stateRef.current) return;
-      const nextState = submitTiebreakChoice(stateRef.current, clientId, weapon);
+      const current = stateRef.current;
+      const nextState =
+        current.phase === "initiative"
+          ? submitInitiativeChoice(current, clientId, weapon)
+          : submitTiebreakChoice(current, clientId, weapon);
       if (!nextState) return;
       publishState(nextState);
     },
@@ -205,12 +213,24 @@ export function useRpsArena() {
 
   const clearGameState = useCallback(() => {
     if (!stateRef.current) return;
-    publishState(startNextRound(stateRef.current));
+    publishState(clearMatch(stateRef.current));
     setSelectedPieceId(null);
   }, [publishState]);
 
-  const isMyTurn = Boolean(state && (state.currentTurn === clientId || state.phase === "tiebreak"));
-  const myTiebreakChoice = state?.tiebreak?.choices[clientId] ?? null;
+  const isMyTurn = Boolean(
+    state &&
+      (state.currentTurn === clientId ||
+        state.phase === "tiebreak" ||
+        state.phase === "initiative"),
+  );
+  const myDuelChoice =
+    state?.phase === "initiative"
+      ? (state.initiative?.choices[clientId] ?? null)
+      : (state?.tiebreak?.choices[clientId] ?? null);
+  const showDuel =
+    Boolean(state) &&
+    ((state!.phase === "initiative" && !myDuelChoice) ||
+      (state!.phase === "tiebreak" && !myDuelChoice));
 
   return {
     state,
@@ -224,12 +244,13 @@ export function useRpsArena() {
     setSpecial,
     readySetup,
     moveSelectedPiece,
-    chooseTiebreak,
+    chooseDuel,
     updateOptions,
     options,
     playNextRound,
     clearGameState,
     isMyTurn,
-    myTiebreakChoice,
+    myDuelChoice,
+    showDuel,
   };
 }

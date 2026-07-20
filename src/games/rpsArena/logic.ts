@@ -15,7 +15,7 @@ export const PIECES_PER_PLAYER = 14;
 
 export type Weapon = "rock" | "paper" | "scissors";
 export type PieceKind = "soldier" | "flag" | "trap";
-export type GamePhase = "setup" | "playing" | "tiebreak" | "finished";
+export type GamePhase = "initiative" | "setup" | "playing" | "tiebreak" | "finished";
 
 export interface ArenaScore {
   wins: Record<string, number>;
@@ -31,12 +31,15 @@ export interface ArenaPiece {
   revealed: boolean;
 }
 
-export interface TiebreakState {
+export interface DuelChoices {
+  choices: Record<string, Weapon | null>;
+}
+
+export interface TiebreakState extends DuelChoices {
   attackerPieceId: string;
   defenderPieceId: string;
   targetRow: number;
   targetCol: number;
-  choices: Record<string, Weapon | null>;
 }
 
 export interface RpsArenaState {
@@ -48,6 +51,7 @@ export interface RpsArenaState {
   setupReady: Record<string, boolean>;
   score: ArenaScore;
   winnerId: string | null;
+  initiative: DuelChoices | null;
   tiebreak: TiebreakState | null;
   options: RpsArenaOptions;
 }
@@ -98,6 +102,15 @@ export function createEmptyScore(playerIds: string[]): ArenaScore {
   return { wins };
 }
 
+function createEmptyDuelChoices(playerAId: string, playerBId: string): DuelChoices {
+  return {
+    choices: {
+      [playerAId]: null,
+      [playerBId]: null,
+    },
+  };
+}
+
 function homeRowsForPlayer(playerId: string, state: RpsArenaState): [number, number] {
   return isBottomPlayer(playerId, state) ? [4, 5] : [0, 1];
 }
@@ -126,17 +139,30 @@ export function createPlayerPieces(ownerId: string, state: RpsArenaState, random
   return pieces;
 }
 
+export interface CreateInitialStateOptions {
+  options?: RpsArenaOptions;
+  firstPlayerId?: string;
+}
+
 export function createInitialState(
   playerAId: string,
   playerBId: string,
   random = Math.random,
-  options: RpsArenaOptions = DEFAULT_RPS_ARENA_OPTIONS,
+  createOptions: RpsArenaOptions | CreateInitialStateOptions = DEFAULT_RPS_ARENA_OPTIONS,
 ): RpsArenaState {
+  const resolved: CreateInitialStateOptions =
+    createOptions && typeof createOptions === "object" && ("options" in createOptions || "firstPlayerId" in createOptions)
+      ? (createOptions as CreateInitialStateOptions)
+      : { options: createOptions as RpsArenaOptions };
+  const options = normalizeArenaOptions(resolved.options ?? DEFAULT_RPS_ARENA_OPTIONS);
+  const firstPlayerId = resolved.firstPlayerId;
+  const skipInitiative = Boolean(firstPlayerId);
+
   const state: RpsArenaState = {
     playerAId,
     playerBId,
-    phase: "setup",
-    currentTurn: playerAId,
+    phase: skipInitiative ? "setup" : "initiative",
+    currentTurn: firstPlayerId ?? playerAId,
     pieces: [],
     setupReady: {
       [playerAId]: false,
@@ -144,8 +170,9 @@ export function createInitialState(
     },
     score: createEmptyScore([playerAId, playerBId]),
     winnerId: null,
+    initiative: skipInitiative ? null : createEmptyDuelChoices(playerAId, playerBId),
     tiebreak: null,
-    options: normalizeArenaOptions(options),
+    options,
   };
 
   state.pieces = [
@@ -220,7 +247,6 @@ export function markSetupReady(state: RpsArenaState, playerId: string): RpsArena
     ...state,
     setupReady,
     phase: bothReady ? "playing" : "setup",
-    currentTurn: state.playerAId,
   };
 }
 
@@ -256,6 +282,7 @@ export function ensureStateShape(state: RpsArenaState): RpsArenaState {
   return {
     ...state,
     options: normalizeArenaOptions(state.options),
+    initiative: state.initiative ?? null,
   };
 }
 
@@ -432,6 +459,45 @@ export function applyMove(
   return resolveSoldierBattle(state, attacker, defender, targetRow, targetCol);
 }
 
+export function submitInitiativeChoice(
+  state: RpsArenaState,
+  playerId: string,
+  weapon: Weapon,
+): RpsArenaState | null {
+  if (state.phase !== "initiative" || !state.initiative) return null;
+  if (playerId !== state.playerAId && playerId !== state.playerBId) return null;
+
+  const choices = {
+    ...state.initiative.choices,
+    [playerId]: weapon,
+  };
+
+  const choiceA = choices[state.playerAId];
+  const choiceB = choices[state.playerBId];
+  if (!choiceA || !choiceB) {
+    return {
+      ...state,
+      initiative: { choices },
+    };
+  }
+
+  const outcome = compareWeapons(choiceA, choiceB);
+  if (outcome === "tie") {
+    return {
+      ...state,
+      initiative: createEmptyDuelChoices(state.playerAId, state.playerBId),
+    };
+  }
+
+  const firstPlayerId = outcome === "left" ? state.playerAId : state.playerBId;
+  return {
+    ...state,
+    phase: "setup",
+    currentTurn: firstPlayerId,
+    initiative: null,
+  };
+}
+
 export function submitTiebreakChoice(
   state: RpsArenaState,
   playerId: string,
@@ -522,16 +588,21 @@ export function submitTiebreakChoice(
 }
 
 export function startNextRound(state: RpsArenaState, random = Math.random): RpsArenaState {
-  const next = createInitialState(
-    state.playerAId,
-    state.playerBId,
-    random,
-    normalizeArenaOptions(state.options),
-  );
+  const firstPlayerId = state.winnerId ?? state.currentTurn ?? state.playerAId;
+  const next = createInitialState(state.playerAId, state.playerBId, random, {
+    options: normalizeArenaOptions(state.options),
+    firstPlayerId,
+  });
   return {
     ...next,
     score: state.score,
   };
+}
+
+export function clearMatch(state: RpsArenaState, random = Math.random): RpsArenaState {
+  return createInitialState(state.playerAId, state.playerBId, random, {
+    options: normalizeArenaOptions(state.options),
+  });
 }
 
 export function isStateForPlayers(state: RpsArenaState, playerA: string, playerB: string): boolean {
