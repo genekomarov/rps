@@ -1,3 +1,12 @@
+import {
+  DEFAULT_RPS_ARENA_OPTIONS,
+  normalizeArenaOptions,
+  type RpsArenaOptions,
+} from "./options";
+
+export type { RpsArenaOptions } from "./options";
+export { DEFAULT_RPS_ARENA_OPTIONS, normalizeArenaOptions } from "./options";
+
 export const RPS_ARENA_GAME_ID = "rps-arena";
 
 export const BOARD_COLS = 7;
@@ -40,6 +49,7 @@ export interface RpsArenaState {
   score: ArenaScore;
   winnerId: string | null;
   tiebreak: TiebreakState | null;
+  options: RpsArenaOptions;
 }
 
 export type RpsArenaWireMessage =
@@ -116,7 +126,12 @@ export function createPlayerPieces(ownerId: string, state: RpsArenaState, random
   return pieces;
 }
 
-export function createInitialState(playerAId: string, playerBId: string, random = Math.random): RpsArenaState {
+export function createInitialState(
+  playerAId: string,
+  playerBId: string,
+  random = Math.random,
+  options: RpsArenaOptions = DEFAULT_RPS_ARENA_OPTIONS,
+): RpsArenaState {
   const state: RpsArenaState = {
     playerAId,
     playerBId,
@@ -130,6 +145,7 @@ export function createInitialState(playerAId: string, playerBId: string, random 
     score: createEmptyScore([playerAId, playerBId]),
     winnerId: null,
     tiebreak: null,
+    options: normalizeArenaOptions(options),
   };
 
   state.pieces = [
@@ -230,6 +246,27 @@ function revealPiece(pieces: ArenaPiece[], pieceId: string): ArenaPiece[] {
 
 function movePiece(pieces: ArenaPiece[], pieceId: string, row: number, col: number): ArenaPiece[] {
   return pieces.map((piece) => (piece.id === pieceId ? { ...piece, row, col } : piece));
+}
+
+function setPieceWeapon(pieces: ArenaPiece[], pieceId: string, weapon: Weapon): ArenaPiece[] {
+  return pieces.map((piece) => (piece.id === pieceId ? { ...piece, weapon } : piece));
+}
+
+export function ensureStateShape(state: RpsArenaState): RpsArenaState {
+  return {
+    ...state,
+    options: normalizeArenaOptions(state.options),
+  };
+}
+
+export function setArenaOptions(
+  state: RpsArenaState,
+  patch: Partial<RpsArenaOptions>,
+): RpsArenaState {
+  return {
+    ...state,
+    options: normalizeArenaOptions({ ...state.options, ...patch }),
+  };
 }
 
 function finishMatch(state: RpsArenaState, winnerId: string): RpsArenaState {
@@ -452,9 +489,14 @@ export function submitTiebreakChoice(
     };
   }
 
+  const changeWeapon = normalizeArenaOptions(state.options).changeWeaponAfterDuel;
+
   if (outcome === "left") {
     let pieces = removePiece(state.pieces, defender.id);
     pieces = revealPiece(pieces, attacker.id);
+    if (changeWeapon) {
+      pieces = setPieceWeapon(pieces, attacker.id, attackerChoice);
+    }
     pieces = movePiece(pieces, attacker.id, targetRow, targetCol);
     return {
       ...state,
@@ -465,17 +507,27 @@ export function submitTiebreakChoice(
     };
   }
 
+  let pieces = revealPiece(removePiece(state.pieces, attacker.id), defender.id);
+  if (changeWeapon) {
+    pieces = setPieceWeapon(pieces, defender.id, defenderChoice);
+  }
+
   return {
     ...state,
     phase: "playing",
-    pieces: revealPiece(removePiece(state.pieces, attacker.id), defender.id),
+    pieces,
     currentTurn: nextTurn,
     tiebreak: null,
   };
 }
 
 export function startNextRound(state: RpsArenaState, random = Math.random): RpsArenaState {
-  const next = createInitialState(state.playerAId, state.playerBId, random);
+  const next = createInitialState(
+    state.playerAId,
+    state.playerBId,
+    random,
+    normalizeArenaOptions(state.options),
+  );
   return {
     ...next,
     score: state.score,

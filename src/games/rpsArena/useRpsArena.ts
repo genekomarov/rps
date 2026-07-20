@@ -6,16 +6,20 @@ import {
   assignSpecial,
   applyMove,
   createInitialState,
+  ensureStateShape,
   isStateForPlayers,
   isWireMessage,
   markSetupReady,
+  setArenaOptions,
   startNextRound,
   submitTiebreakChoice,
   type PieceKind,
+  type RpsArenaOptions,
   type RpsArenaState,
   type RpsArenaWireMessage,
   type Weapon,
 } from "./logic";
+import { loadArenaOptions, saveArenaOptions } from "./options";
 
 const LEADER_INIT_DELAY_MS = 300;
 const FOLLOWER_INIT_DELAY_MS = 1200;
@@ -31,6 +35,7 @@ export function useRpsArena() {
 
   const [state, setState] = useState<RpsArenaState | null>(null);
   const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null);
+  const [options, setOptions] = useState<RpsArenaOptions>(() => loadArenaOptions());
   const stateRef = useRef<RpsArenaState | null>(null);
   const initTimerRef = useRef<number | null>(null);
 
@@ -48,16 +53,20 @@ export function useRpsArena() {
 
   const publishState = useCallback(
     (nextState: RpsArenaState) => {
-      stateRef.current = nextState;
-      setState(nextState);
-      sendWire({ type: "state", state: nextState });
+      const normalized = ensureStateShape(nextState);
+      stateRef.current = normalized;
+      setState(normalized);
+      setOptions(normalized.options);
+      sendWire({ type: "state", state: normalized });
     },
     [sendWire],
   );
 
   const bootstrapState = useCallback(() => {
     if (!players || stateRef.current) return;
-    publishState(createInitialState(players.playerAId, players.playerBId));
+    publishState(
+      createInitialState(players.playerAId, players.playerBId, Math.random, loadArenaOptions()),
+    );
   }, [players, publishState]);
 
   const clearInitTimer = useCallback(() => {
@@ -76,6 +85,7 @@ export function useRpsArena() {
     setState(null);
     setSelectedPieceId(null);
     stateRef.current = null;
+    setOptions(loadArenaOptions());
   }, [sessionKey, clearInitTimer]);
 
   useEffect(() => {
@@ -100,8 +110,10 @@ export function useRpsArena() {
 
       if (body.type === "state") {
         if (!isStateForPlayers(body.state, clientId, opponentId)) return;
-        stateRef.current = body.state;
-        setState(body.state);
+        const normalized = ensureStateShape(body.state);
+        stateRef.current = normalized;
+        setState(normalized);
+        setOptions(normalized.options);
         setSelectedPieceId(null);
         clearInitTimer();
       }
@@ -175,6 +187,16 @@ export function useRpsArena() {
     [clientId, publishState],
   );
 
+  const updateOptions = useCallback(
+    (patch: Partial<RpsArenaOptions>) => {
+      const nextOptions = saveArenaOptions(patch);
+      setOptions(nextOptions);
+      if (!stateRef.current) return;
+      publishState(setArenaOptions(stateRef.current, nextOptions));
+    },
+    [publishState],
+  );
+
   const playNextRound = useCallback(() => {
     if (!stateRef.current || stateRef.current.phase !== "finished") return;
     publishState(startNextRound(stateRef.current));
@@ -203,6 +225,8 @@ export function useRpsArena() {
     readySetup,
     moveSelectedPiece,
     chooseTiebreak,
+    updateOptions,
+    options,
     playNextRound,
     clearGameState,
     isMyTurn,

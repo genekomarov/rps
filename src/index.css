@@ -614,6 +614,27 @@ button:disabled {
   gap: 0.45rem;
 }
 
+.arena-options {
+  gap: 0.75rem;
+}
+
+.arena-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.65rem;
+  align-items: start;
+  cursor: pointer;
+}
+
+.arena-option input {
+  margin-top: 0.2rem;
+}
+
+.arena-option span {
+  display: grid;
+  gap: 0.2rem;
+}
+
 .pwa-banner {
   position: sticky;
   top: 0;

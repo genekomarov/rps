@@ -47,6 +47,8 @@ export default function RpsArenaGame() {
     readySetup,
     moveSelectedPiece,
     chooseTiebreak,
+    updateOptions,
+    options,
     playNextRound,
     clearGameState,
     isMyTurn,
@@ -253,6 +255,23 @@ export default function RpsArenaGame() {
           ) : null}
         </>
       ) : null}
+
+      <section className="card arena-options">
+        <h2>Опции</h2>
+        <label className="arena-option">
+          <input
+            type="checkbox"
+            checked={options.changeWeaponAfterDuel}
+            onChange={(event) => updateOptions({ changeWeaponAfterDuel: event.target.checked })}
+          />
+          <span>
+            <strong>Изменение фигуры после дуэли</strong>
+            <span className="muted">
+              Победитель дуэли получает оружие, выбранное в перестрелке, вместо исходного.
+            </span>
+          </span>
+        </label>
+      </section>
     </>
   );
 }

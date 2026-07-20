@@ -162,7 +162,7 @@ describe("applyMove", () => {
 });
 
 describe("tiebreak", () => {
-  it("resolves equal weapon clash via duel choices", () => {
+  it("keeps original weapon after duel when option is off", () => {
     let state = readyBothPlayers(createInitialState("alice", "bob", () => 0.1));
     const attacker = state.pieces.find((piece) => piece.ownerId === "alice" && piece.kind === "soldier")!;
     const defender = state.pieces.find((piece) => piece.ownerId === "bob" && piece.kind === "soldier")!;
@@ -185,7 +185,69 @@ describe("tiebreak", () => {
     state = submitTiebreakChoice(state, "bob", "rock")!;
     expect(state.phase).toBe("playing");
     expect(state.pieces.some((piece) => piece.id === defender.id)).toBe(false);
-    expect(state.pieces.find((piece) => piece.id === attacker.id)?.revealed).toBe(true);
+    expect(state.pieces.find((piece) => piece.id === attacker.id)).toMatchObject({
+      revealed: true,
+      weapon: "rock",
+      row: defender.row,
+      col: defender.col,
+    });
+  });
+
+  it("changes winner weapon after duel when option is on", () => {
+    let state = readyBothPlayers(
+      createInitialState("alice", "bob", () => 0.1, { changeWeaponAfterDuel: true }),
+    );
+    const attacker = state.pieces.find((piece) => piece.ownerId === "alice" && piece.kind === "soldier")!;
+    const defender = state.pieces.find((piece) => piece.ownerId === "bob" && piece.kind === "soldier")!;
+
+    state = {
+      ...state,
+      pieces: state.pieces.map((piece) => {
+        if (piece.id === attacker.id) return { ...piece, weapon: "rock", row: defender.row + 1, col: defender.col };
+        if (piece.id === defender.id) return { ...piece, weapon: "rock" };
+        return piece;
+      }),
+    };
+
+    state = applyMove(state, "alice", attacker.id, defender.row, defender.col)!;
+    state = submitTiebreakChoice(state, "alice", "paper")!;
+    state = submitTiebreakChoice(state, "bob", "rock")!;
+
+    expect(state.phase).toBe("playing");
+    expect(state.pieces.some((piece) => piece.id === defender.id)).toBe(false);
+    expect(state.pieces.find((piece) => piece.id === attacker.id)).toMatchObject({
+      revealed: true,
+      weapon: "paper",
+      row: defender.row,
+      col: defender.col,
+    });
+  });
+
+  it("changes defender weapon after winning duel when option is on", () => {
+    let state = readyBothPlayers(
+      createInitialState("alice", "bob", () => 0.1, { changeWeaponAfterDuel: true }),
+    );
+    const attacker = state.pieces.find((piece) => piece.ownerId === "alice" && piece.kind === "soldier")!;
+    const defender = state.pieces.find((piece) => piece.ownerId === "bob" && piece.kind === "soldier")!;
+
+    state = {
+      ...state,
+      pieces: state.pieces.map((piece) => {
+        if (piece.id === attacker.id) return { ...piece, weapon: "scissors", row: defender.row + 1, col: defender.col };
+        if (piece.id === defender.id) return { ...piece, weapon: "scissors" };
+        return piece;
+      }),
+    };
+
+    state = applyMove(state, "alice", attacker.id, defender.row, defender.col)!;
+    state = submitTiebreakChoice(state, "alice", "rock")!;
+    state = submitTiebreakChoice(state, "bob", "paper")!;
+
+    expect(state.pieces.some((piece) => piece.id === attacker.id)).toBe(false);
+    expect(state.pieces.find((piece) => piece.id === defender.id)).toMatchObject({
+      revealed: true,
+      weapon: "paper",
+    });
   });
 
   it("reveals defender after winning battle", () => {
@@ -217,6 +279,16 @@ describe("startNextRound", () => {
     expect(next.phase).toBe("setup");
     expect(next.score.wins.alice).toBe(2);
     expect(next.pieces).toHaveLength(28);
+  });
+
+  it("preserves arena options between rounds", () => {
+    let state = readyBothPlayers(
+      createInitialState("alice", "bob", () => 0.1, { changeWeaponAfterDuel: true }),
+    );
+    state = { ...state, phase: "finished", winnerId: "alice" };
+
+    const next = startNextRound(state, () => 0.2);
+    expect(next.options.changeWeaponAfterDuel).toBe(true);
   });
 });
 
