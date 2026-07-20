@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { buildHash } from "../lib/hashRouter";
+import { useFeedbackPrefs } from "../hooks/useFeedbackPrefs";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -8,6 +9,8 @@ interface AppLayoutProps {
 }
 
 export default function AppLayout({ children, connected, nickname }: AppLayoutProps) {
+  const { prefs, setSoundEnabled, setVibrationEnabled } = useFeedbackPrefs();
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -21,6 +24,26 @@ export default function AppLayout({ children, connected, nickname }: AppLayoutPr
           <a href={buildHash({ name: "welcome" })}>Главная</a>
           <a href={buildHash({ name: "connection" })}>Подключение</a>
         </nav>
+        <div className="app-feedback-toggles" role="group" aria-label="Уведомления">
+          <button
+            type="button"
+            className={`feedback-toggle${prefs.soundEnabled ? " feedback-toggle-on" : ""}`}
+            aria-pressed={prefs.soundEnabled}
+            title={prefs.soundEnabled ? "Выключить звук" : "Включить звук"}
+            onClick={() => setSoundEnabled(!prefs.soundEnabled)}
+          >
+            Звук {prefs.soundEnabled ? "вкл" : "выкл"}
+          </button>
+          <button
+            type="button"
+            className={`feedback-toggle${prefs.vibrationEnabled ? " feedback-toggle-on" : ""}`}
+            aria-pressed={prefs.vibrationEnabled}
+            title={prefs.vibrationEnabled ? "Выключить вибрацию" : "Включить вибрацию"}
+            onClick={() => setVibrationEnabled(!prefs.vibrationEnabled)}
+          >
+            Вибрация {prefs.vibrationEnabled ? "вкл" : "выкл"}
+          </button>
+        </div>
         {connected ? (
           <p className="connection-badge" title={nickname}>
             Онлайн · {nickname}

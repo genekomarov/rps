@@ -314,6 +314,28 @@ button:disabled {
   text-decoration: underline;
 }
 
+.app-feedback-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.feedback-toggle {
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  background: #f9fafb;
+  color: #374151;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.25rem 0.7rem;
+}
+
+.feedback-toggle-on {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
 .connection-badge {
   margin: 0;
   font-size: 0.88rem;

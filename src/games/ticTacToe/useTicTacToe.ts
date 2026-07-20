@@ -11,6 +11,9 @@ import {
   type TicTacToeState,
   type TicTacToeWireMessage,
 } from "./logic";
+import { notifyOpponentAction } from "../../lib/feedback";
+import { isVisibleOpponentTicTacToeAction } from "../../lib/opponentAction";
+
 
 const LEADER_INIT_DELAY_MS = 300;
 const FOLLOWER_INIT_DELAY_MS = 1200;
@@ -105,6 +108,10 @@ export function useTicTacToe() {
 
       if (body.type === "state") {
         if (!isStateForPlayers(body.state, clientId, opponentId)) return;
+        const previous = stateRef.current;
+        if (isVisibleOpponentTicTacToeAction(previous, body.state, clientId)) {
+          notifyOpponentAction();
+        }
         stateRef.current = body.state;
         setState(body.state);
         clearInitTimer();

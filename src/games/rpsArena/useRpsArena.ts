@@ -22,6 +22,9 @@ import {
   type Weapon,
 } from "./logic";
 import { loadArenaOptions, saveArenaOptions } from "./options";
+import { notifyOpponentAction } from "../../lib/feedback";
+import { isVisibleOpponentArenaAction } from "../../lib/opponentAction";
+
 
 const LEADER_INIT_DELAY_MS = 300;
 const FOLLOWER_INIT_DELAY_MS = 1200;
@@ -115,6 +118,10 @@ export function useRpsArena() {
       if (body.type === "state") {
         if (!isStateForPlayers(body.state, clientId, opponentId)) return;
         const normalized = ensureStateShape(body.state);
+        const previous = stateRef.current;
+        if (isVisibleOpponentArenaAction(previous, normalized, clientId)) {
+          notifyOpponentAction();
+        }
         stateRef.current = normalized;
         setState(normalized);
         setOptions(normalized.options);
