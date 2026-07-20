@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { buildHash } from "../lib/hashRouter";
 import { useFeedbackPrefs } from "../hooks/useFeedbackPrefs";
+import { useTheme } from "../hooks/useTheme";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -10,6 +11,7 @@ interface AppLayoutProps {
 
 export default function AppLayout({ children, connected, nickname }: AppLayoutProps) {
   const { prefs, setSoundEnabled, setVibrationEnabled } = useFeedbackPrefs();
+  const { isDark, toggleTheme } = useTheme();
 
   return (
     <div className="app-shell">
@@ -24,7 +26,16 @@ export default function AppLayout({ children, connected, nickname }: AppLayoutPr
           <a href={buildHash({ name: "welcome" })}>Главная</a>
           <a href={buildHash({ name: "connection" })}>Подключение</a>
         </nav>
-        <div className="app-feedback-toggles" role="group" aria-label="Уведомления">
+        <div className="app-feedback-toggles" role="group" aria-label="Настройки интерфейса">
+          <button
+            type="button"
+            className={`feedback-toggle${isDark ? " feedback-toggle-on" : ""}`}
+            aria-pressed={isDark}
+            title={isDark ? "Включить светлую тему" : "Включить тёмную тему"}
+            onClick={toggleTheme}
+          >
+            Тема: {isDark ? "тёмная" : "светлая"}
+          </button>
           <button
             type="button"
             className={`feedback-toggle${prefs.soundEnabled ? " feedback-toggle-on" : ""}`}
