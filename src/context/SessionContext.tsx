@@ -19,6 +19,7 @@ import {
 import { getPhaseMeta, resolvePhase } from "../lib/sessionPhase";
 import { loadClientId, loadState, resetClientId, resetSessionState, saveState } from "../lib/storage";
 import { WebRtcMesh } from "../lib/webrtc";
+import { useScreenWakeLock } from "../hooks/useScreenWakeLock";
 import type {
   ChatMessage,
   GameMessagePayload,
@@ -104,6 +105,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const phase = resolvePhase({ nickname, hostOfferCode, answerCode, peers, busy });
   const phaseMeta = getPhaseMeta(phase);
   const isConnected = phase === "chat";
+  useScreenWakeLock(isConnected);
 
   const appendLog = useCallback((level: LogLevel, message: string) => {
     setLogEntries((prev) => trimLogEntries([...prev, createLogEntry(level, message)]));
