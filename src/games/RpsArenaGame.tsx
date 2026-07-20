@@ -170,56 +170,60 @@ export default function RpsArenaGame() {
       {state ? (
         <>
           <section className="card arena-board-card">
-            <div
-              className="arena-board"
-              style={{ gridTemplateColumns: `repeat(${BOARD_COLS}, minmax(42px, 1fr))` }}
-            >
-              {Array.from({ length: BOARD_ROWS }, (_, displayRow) =>
-                Array.from({ length: BOARD_COLS }, (_, displayCol) => {
-                  const { row, col } = toModelCoords(displayRow, displayCol);
-                  const piece = state.pieces.find((item) => item.row === row && item.col === col);
-                  const isOwn = piece?.ownerId === clientId;
-                  const isSelected = piece?.id === selectedPieceId;
-                  const isMoveTarget = legalMoves.some((move) => move.row === row && move.col === col);
-                  const isHomeRow =
-                    piece &&
-                    (isBottomPlayer(piece.ownerId, state)
-                      ? row >= BOARD_ROWS - 2
-                      : row <= 1);
-                  const isMoveFrom =
-                    state.lastMove?.fromRow === row && state.lastMove?.fromCol === col;
-                  const isMoveTo = state.lastMove?.toRow === row && state.lastMove?.toCol === col;
+            <div className="arena-board-stage">
+              <div
+                className="arena-board"
+                style={{ gridTemplateColumns: `repeat(${BOARD_COLS}, minmax(42px, 1fr))` }}
+              >
+                {Array.from({ length: BOARD_ROWS }, (_, displayRow) =>
+                  Array.from({ length: BOARD_COLS }, (_, displayCol) => {
+                    const { row, col } = toModelCoords(displayRow, displayCol);
+                    const piece = state.pieces.find((item) => item.row === row && item.col === col);
+                    const isOwn = piece?.ownerId === clientId;
+                    const isSelected = piece?.id === selectedPieceId;
+                    const isMoveTarget = legalMoves.some((move) => move.row === row && move.col === col);
+                    const isHomeRow =
+                      piece &&
+                      (isBottomPlayer(piece.ownerId, state)
+                        ? row >= BOARD_ROWS - 2
+                        : row <= 1);
+                    const isMoveFrom =
+                      state.lastMove?.fromRow === row && state.lastMove?.fromCol === col;
+                    const isMoveTo = state.lastMove?.toRow === row && state.lastMove?.toCol === col;
 
-                  return (
-                    <button
-                      key={`${displayRow}-${displayCol}`}
-                      type="button"
-                      className={`arena-cell${isSelected ? " arena-cell-selected" : ""}${isMoveTarget ? " arena-cell-target" : ""}${isHomeRow ? " arena-cell-home" : ""}${isMoveFrom ? " arena-cell-move-from" : ""}${isMoveTo ? " arena-cell-move-to" : ""}`}
-                      onClick={() => handleCellClick(displayRow, displayCol)}
-                      disabled={boardLocked}
-                      aria-label={`Клетка ${displayRow + 1}:${displayCol + 1}`}
-                    >
-                      {piece ? (
-                        <span
-                          className={`arena-piece arena-piece-player-${piece.ownerId === state.playerAId ? "a" : "b"}${isOwn ? " arena-piece-own" : ""}`}
-                        >
-                          <ArenaPieceIcon piece={piece} isOwn={Boolean(isOwn)} className="arena-icon" />
-                        </span>
-                      ) : null}
-                    </button>
-                  );
-                }),
-              )}
+                    return (
+                      <button
+                        key={`${displayRow}-${displayCol}`}
+                        type="button"
+                        className={`arena-cell${isSelected ? " arena-cell-selected" : ""}${isMoveTarget ? " arena-cell-target" : ""}${isHomeRow ? " arena-cell-home" : ""}${isMoveFrom ? " arena-cell-move-from" : ""}${isMoveTo ? " arena-cell-move-to" : ""}`}
+                        onClick={() => handleCellClick(displayRow, displayCol)}
+                        disabled={boardLocked}
+                        aria-label={`Клетка ${displayRow + 1}:${displayCol + 1}`}
+                      >
+                        {piece ? (
+                          <span
+                            className={`arena-piece arena-piece-player-${piece.ownerId === state.playerAId ? "a" : "b"}${isOwn ? " arena-piece-own" : ""}`}
+                          >
+                            <ArenaPieceIcon piece={piece} isOwn={Boolean(isOwn)} className="arena-icon" />
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  }),
+                )}
+              </div>
+
+              {showDuel ? (
+                <div className="arena-duel-overlay" role="dialog" aria-modal="true" aria-label={duelCopy.title}>
+                  <ArenaDuel
+                    title={duelCopy.title}
+                    description={duelCopy.description}
+                    onChoose={chooseDuel}
+                  />
+                </div>
+              ) : null}
             </div>
           </section>
-
-          {showDuel ? (
-            <ArenaDuel
-              title={duelCopy.title}
-              description={duelCopy.description}
-              onChoose={chooseDuel}
-            />
-          ) : null}
 
           {canEditSetup ? (
             <section className="card arena-setup">
