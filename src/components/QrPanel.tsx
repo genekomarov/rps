@@ -18,9 +18,10 @@ function qrRenderOptions(value: string): QRCodeToDataURLOptions {
 interface QrPanelProps {
   value: string;
   title: string;
+  fallbackLabel: string;
 }
 
-export default function QrPanel({ value, title }: QrPanelProps) {
+export default function QrPanel({ value, title, fallbackLabel }: QrPanelProps) {
   const [src, setSrc] = useState("");
   const [error, setError] = useState("");
 
@@ -64,7 +65,7 @@ export default function QrPanel({ value, title }: QrPanelProps) {
       {value ? <p className="muted">Увеличьте QR на весь экран, если камера не читает с монитора.</p> : null}
       {error ? <p className="error">{error}</p> : null}
       <label className="field">
-        <span>Payload (fallback)</span>
+        <span>{fallbackLabel}</span>
         <textarea readOnly value={value} rows={5} />
       </label>
     </section>

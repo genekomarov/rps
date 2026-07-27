@@ -92,9 +92,17 @@ interface QrScannerProps {
   onScan: (value: string) => void | Promise<void>;
   onLog?: (level: LogLevel, message: string) => void;
   disabled?: boolean;
+  inputLabel: string;
+  partnerFieldLabel: string;
 }
 
-export default function QrScanner({ onScan, onLog, disabled = false }: QrScannerProps) {
+export default function QrScanner({
+  onScan,
+  onLog,
+  disabled = false,
+  inputLabel,
+  partnerFieldLabel,
+}: QrScannerProps) {
   const [manualValue, setManualValue] = useState("");
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [error, setError] = useState("");
@@ -206,10 +214,10 @@ export default function QrScanner({ onScan, onLog, disabled = false }: QrScanner
     <section className="card">
       <h3>Принять код</h3>
       <p className="muted scanner-hint">
-        Быстрее всего — вставить текст из «Payload». Камера подходит для коротких QR.
+        Быстрее всего — вставить текст из «{partnerFieldLabel}». Камера подходит для коротких QR.
       </p>
       <label className="field">
-        <span>Вставьте payload</span>
+        <span>{inputLabel}</span>
         <textarea
           value={manualValue}
           onChange={(event) => setManualValue(event.target.value)}
@@ -220,7 +228,7 @@ export default function QrScanner({ onScan, onLog, disabled = false }: QrScanner
       </label>
       <div className="actions">
         <button type="button" onClick={applyManual} disabled={!manualValue.trim() || disabled || fileBusy}>
-          Применить payload
+          Применить
         </button>
         <button
           type="button"

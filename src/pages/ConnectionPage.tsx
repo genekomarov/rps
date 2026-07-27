@@ -30,6 +30,7 @@ export default function ConnectionPage() {
 
   const showHostActions = !isConnected && !answerCode;
   const showQrOutput = Boolean(hostOfferCode || answerCode) && !isConnected;
+  const isHostWaiting = Boolean(hostOfferCode) && !answerCode;
 
   return (
     <>
@@ -82,6 +83,7 @@ export default function ConnectionPage() {
                   : "Ваше приглашение — отдайте гостю"
               }
               value={answerCode || hostOfferCode}
+              fallbackLabel={answerCode ? "Ответ" : "Приглашение"}
             />
           ) : null}
           <QrScanner
@@ -89,6 +91,8 @@ export default function ConnectionPage() {
             onScan={handleScannedValue}
             onLog={appendLog}
             disabled={busy}
+            inputLabel={isHostWaiting ? "Вставить ответ" : "Вставить приглашение"}
+            partnerFieldLabel={isHostWaiting ? "Ответ" : "Приглашение"}
           />
         </div>
       ) : (
