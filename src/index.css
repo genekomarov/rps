@@ -291,11 +291,6 @@ button:disabled {
   overflow: hidden;
 }
 
-.scanner-hint {
-  font-size: 0.92rem;
-  line-height: 1.45;
-}
-
 .chat {
   min-height: 380px;
 }

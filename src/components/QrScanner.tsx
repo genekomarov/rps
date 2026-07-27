@@ -97,7 +97,6 @@ interface QrScannerProps {
   onLog?: (level: LogLevel, message: string) => void;
   disabled?: boolean;
   inputLabel: string;
-  partnerFieldLabel: string;
 }
 
 export default function QrScanner({
@@ -105,7 +104,6 @@ export default function QrScanner({
   onLog,
   disabled = false,
   inputLabel,
-  partnerFieldLabel,
 }: QrScannerProps) {
   const [manualValue, setManualValue] = useState("");
   const [cameraEnabled, setCameraEnabled] = useState(false);
@@ -213,10 +211,6 @@ export default function QrScanner({
   return (
     <section className="card">
       <h3>Принять код</h3>
-      <p className="muted scanner-hint">
-        Кликните по полю, чтобы вставить из буфера, или нажмите Ctrl/Cmd+V. Текст берётся из «
-        {partnerFieldLabel}». Камера подходит для коротких QR.
-      </p>
       <label className="field">
         <span>{inputLabel}</span>
         <input

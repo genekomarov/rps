@@ -105,7 +105,6 @@ export default function ConnectionPage() {
               onLog={appendLog}
               disabled={busy}
               inputLabel="Вставить ответ"
-              partnerFieldLabel="Ответ"
             />
           ) : null}
           {mode === "guest" && !answerCode ? (
@@ -115,7 +114,6 @@ export default function ConnectionPage() {
               onLog={appendLog}
               disabled={busy}
               inputLabel="Вставить приглашение"
-              partnerFieldLabel="Приглашение"
             />
           ) : null}
         </div>
