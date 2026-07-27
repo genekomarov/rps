@@ -51,7 +51,7 @@ export default function ConnectionPage() {
   return (
     <>
       <section className="card">
-        <h1>Подключение</h1>
+        <h1>{isConnected ? "Подключено" : "Подключение"}</h1>
         {showNicknameField ? (
           <label className="field">
             <span>Ник</span>
@@ -115,19 +115,6 @@ export default function ConnectionPage() {
             />
           ) : null}
         </div>
-      ) : null}
-
-      {isConnected ? (
-        <section className="card">
-          <h2>Соединение активно</h2>
-          <p className="muted">
-            P2P-канал открыт. Перейдите на главную, чтобы выбрать игру, или нажмите «Сбросить сессию»,
-            чтобы разорвать соединение.
-          </p>
-          <p className="muted">
-            Держите вкладку на экране: при сворачивании телефона WebRTC часто обрывается.
-          </p>
-        </section>
       ) : null}
 
       <ConnectionLog entries={logEntries} diagnostics={diagnostics} onClear={clearLog} />

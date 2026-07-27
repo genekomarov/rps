@@ -150,11 +150,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     saveState({ messages: trimChatHistory(messages, HISTORY_LIMIT) });
   }, [messages]);
 
+  const wasConnectedRef = useRef(false);
+
   useEffect(() => {
-    if (!isConnected) return;
+    if (isConnected) {
+      wasConnectedRef.current = true;
+      setHostOfferCode("");
+      setAnswerCode("");
+      return;
+    }
+
+    if (!wasConnectedRef.current) return;
+
+    wasConnectedRef.current = false;
+    setConnectionRole(null);
     setHostOfferCode("");
     setAnswerCode("");
-  }, [isConnected]);
+    appendLog("info", "Соединение разорвано");
+  }, [isConnected, appendLog]);
 
   useEffect(() => {
     if (!nickname.trim()) return undefined;
