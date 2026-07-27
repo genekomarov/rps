@@ -339,8 +339,24 @@ button:disabled {
   border-bottom: 1px solid var(--border);
 }
 
+.app-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.app-header-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+}
+
 .app-brand {
-  flex: 1 1 12rem;
+  min-width: 0;
 }
 
 .app-title-link {
@@ -401,6 +417,8 @@ button:disabled {
 
 .connection-badge {
   margin: 0;
+  margin-left: auto;
+  flex-shrink: 0;
   font-size: 0.88rem;
   font-weight: 600;
   color: var(--online-text);

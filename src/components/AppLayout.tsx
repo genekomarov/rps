@@ -93,49 +93,53 @@ export default function AppLayout({ children, connectionStatus, nickname }: AppL
   return (
     <div className="app-shell">
       <header className="app-header">
-        <div className="app-brand">
-          <a href={buildHash({ name: "welcome" })} className="app-title-link">
-            P2P Игры
-          </a>
-          <p className="muted app-tagline">Локальные игры без сервера</p>
+        <div className="app-header-top">
+          <div className="app-brand">
+            <a href={buildHash({ name: "welcome" })} className="app-title-link">
+              P2P Игры
+            </a>
+            <p className="muted app-tagline">Локальные игры без сервера</p>
+          </div>
+          {statusBadge}
         </div>
-        <nav className="app-nav" aria-label="Основная навигация">
-          <a href={buildHash({ name: "welcome" })}>Главная</a>
-          <a href={buildHash({ name: "connection" })}>Подключение</a>
-        </nav>
-        <div className="app-feedback-toggles" role="group" aria-label="Настройки интерфейса">
-          <button
-            type="button"
-            className={`feedback-toggle${isDark ? " feedback-toggle-on" : ""}`}
-            aria-pressed={isDark}
-            aria-label={isDark ? "Включить светлую тему" : "Включить тёмную тему"}
-            title={isDark ? "Включить светлую тему" : "Включить тёмную тему"}
-            onClick={toggleTheme}
-          >
-            {isDark ? <SunIcon /> : <MoonIcon />}
-          </button>
-          <button
-            type="button"
-            className={`feedback-toggle${prefs.soundEnabled ? " feedback-toggle-on" : ""}`}
-            aria-pressed={prefs.soundEnabled}
-            aria-label={prefs.soundEnabled ? "Выключить звук" : "Включить звук"}
-            title={prefs.soundEnabled ? "Выключить звук" : "Включить звук"}
-            onClick={() => setSoundEnabled(!prefs.soundEnabled)}
-          >
-            {prefs.soundEnabled ? <SoundOnIcon /> : <SoundOffIcon />}
-          </button>
-          <button
-            type="button"
-            className={`feedback-toggle${prefs.vibrationEnabled ? " feedback-toggle-on" : ""}`}
-            aria-pressed={prefs.vibrationEnabled}
-            aria-label={prefs.vibrationEnabled ? "Выключить вибрацию" : "Включить вибрацию"}
-            title={prefs.vibrationEnabled ? "Выключить вибрацию" : "Включить вибрацию"}
-            onClick={() => setVibrationEnabled(!prefs.vibrationEnabled)}
-          >
-            <VibrationIcon />
-          </button>
+        <div className="app-header-bottom">
+          <nav className="app-nav" aria-label="Основная навигация">
+            <a href={buildHash({ name: "welcome" })}>Главная</a>
+            <a href={buildHash({ name: "connection" })}>Подключение</a>
+          </nav>
+          <div className="app-feedback-toggles" role="group" aria-label="Настройки интерфейса">
+            <button
+              type="button"
+              className={`feedback-toggle${isDark ? " feedback-toggle-on" : ""}`}
+              aria-pressed={isDark}
+              aria-label={isDark ? "Включить светлую тему" : "Включить тёмную тему"}
+              title={isDark ? "Включить светлую тему" : "Включить тёмную тему"}
+              onClick={toggleTheme}
+            >
+              {isDark ? <SunIcon /> : <MoonIcon />}
+            </button>
+            <button
+              type="button"
+              className={`feedback-toggle${prefs.soundEnabled ? " feedback-toggle-on" : ""}`}
+              aria-pressed={prefs.soundEnabled}
+              aria-label={prefs.soundEnabled ? "Выключить звук" : "Включить звук"}
+              title={prefs.soundEnabled ? "Выключить звук" : "Включить звук"}
+              onClick={() => setSoundEnabled(!prefs.soundEnabled)}
+            >
+              {prefs.soundEnabled ? <SoundOnIcon /> : <SoundOffIcon />}
+            </button>
+            <button
+              type="button"
+              className={`feedback-toggle${prefs.vibrationEnabled ? " feedback-toggle-on" : ""}`}
+              aria-pressed={prefs.vibrationEnabled}
+              aria-label={prefs.vibrationEnabled ? "Выключить вибрацию" : "Включить вибрацию"}
+              title={prefs.vibrationEnabled ? "Выключить вибрацию" : "Включить вибрацию"}
+              onClick={() => setVibrationEnabled(!prefs.vibrationEnabled)}
+            >
+              <VibrationIcon />
+            </button>
+          </div>
         </div>
-        {statusBadge}
       </header>
       <main className="layout">{children}</main>
     </div>
