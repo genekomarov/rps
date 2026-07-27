@@ -24,6 +24,7 @@ interface QrPanelProps {
 export default function QrPanel({ value, title, fallbackLabel }: QrPanelProps) {
   const [src, setSrc] = useState("");
   const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -54,6 +55,21 @@ export default function QrPanel({ value, title, fallbackLabel }: QrPanelProps) {
     };
   }, [value]);
 
+  useEffect(() => {
+    setCopied(false);
+  }, [value]);
+
+  async function copyValue() {
+    if (!value) return;
+
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+
   return (
     <section className="card qr-panel">
       <h3>{title}</h3>
@@ -65,8 +81,17 @@ export default function QrPanel({ value, title, fallbackLabel }: QrPanelProps) {
       {value ? <p className="muted">Увеличьте QR на весь экран, если камера не читает с монитора.</p> : null}
       {error ? <p className="error">{error}</p> : null}
       <label className="field">
-        <span>{fallbackLabel}</span>
-        <textarea readOnly value={value} rows={5} />
+        <span>
+          {fallbackLabel}
+          {copied ? " — скопировано" : ""}
+        </span>
+        <input
+          className="copy-field"
+          readOnly
+          value={value}
+          onClick={() => void copyValue()}
+          title="Нажмите, чтобы скопировать"
+        />
       </label>
     </section>
   );

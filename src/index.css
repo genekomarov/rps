@@ -135,6 +135,15 @@ p {
   color: var(--text-muted);
 }
 
+.field input.copy-field {
+  cursor: pointer;
+  resize: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
+}
+
 .actions {
   display: flex;
   gap: 0.5rem;
