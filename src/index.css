@@ -23,6 +23,9 @@
   --online-bg: #f0fdf4;
   --online-border: #86efac;
   --online-text: #166534;
+  --connecting-bg: #eff6ff;
+  --connecting-border: #93c5fd;
+  --connecting-text: #1d4ed8;
   --offline-bg: #fffbeb;
   --offline-border: #fcd34d;
   --offline-text: #92400e;
@@ -58,6 +61,9 @@
   --online-bg: #052e1b;
   --online-border: #166534;
   --online-text: #86efac;
+  --connecting-bg: #1e3a8a;
+  --connecting-border: #60a5fa;
+  --connecting-text: #bfdbfe;
   --offline-bg: #422006;
   --offline-border: #b45309;
   --offline-text: #fcd34d;
@@ -401,6 +407,12 @@ button:disabled {
   color: var(--offline-text);
   background: var(--offline-bg);
   border-color: var(--offline-border);
+}
+
+.connection-badge-connecting {
+  color: var(--connecting-text);
+  background: var(--connecting-bg);
+  border-color: var(--connecting-border);
 }
 
 .welcome-page {

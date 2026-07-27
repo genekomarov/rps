@@ -1,5 +1,8 @@
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
+export type ConnectionStatus = "offline" | "connecting" | "online";
+export type ConnectionRole = "host" | "guest";
+
 export interface LogEntry {
   id: string;
   time: number;

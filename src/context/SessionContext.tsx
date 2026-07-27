@@ -22,6 +22,8 @@ import { WebRtcMesh } from "../lib/webrtc";
 import { useScreenWakeLock } from "../hooks/useScreenWakeLock";
 import type {
   ChatMessage,
+  ConnectionRole,
+  ConnectionStatus,
   GameMessagePayload,
   HostAnswerBody,
   HostOfferBody,
@@ -54,6 +56,9 @@ export interface SessionContextValue {
   phase: SessionPhase;
   phaseMeta: PhaseMeta;
   isConnected: boolean;
+  connectionStatus: ConnectionStatus;
+  connectionRole: ConnectionRole | null;
+  setConnectionRole: (role: ConnectionRole | null) => void;
   saveNickname: () => void;
   becomeHost: () => Promise<void>;
   handleScannedValue: (value: string) => Promise<void>;
@@ -95,6 +100,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [busyLabel, setBusyLabel] = useState("");
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
   const [diagnostics, setDiagnostics] = useState<PeerDiagnostic[]>([]);
+  const [connectionRole, setConnectionRole] = useState<ConnectionRole | null>(null);
 
   const meshRef = useRef<WebRtcMesh | null>(null);
   const resettingRef = useRef(false);
@@ -105,6 +111,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const phase = resolvePhase({ nickname, hostOfferCode, answerCode, peers, busy });
   const phaseMeta = getPhaseMeta(phase);
   const isConnected = phase === "chat";
+  const connectionStatus: ConnectionStatus = isConnected
+    ? "online"
+    : connectionRole || hostOfferCode || answerCode
+      ? "connecting"
+      : "offline";
   useScreenWakeLock(isConnected);
 
   const appendLog = useCallback((level: LogLevel, message: string) => {
@@ -292,6 +303,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setPeers([]);
     setHostOfferCode("");
     setAnswerCode("");
+    setConnectionRole(null);
     setError("");
     setDiagnostics([]);
     messageIdsRef.current = new Set();
@@ -344,6 +356,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       phase,
       phaseMeta,
       isConnected,
+      connectionStatus,
+      connectionRole,
+      setConnectionRole,
       saveNickname,
       becomeHost,
       handleScannedValue,
@@ -372,6 +387,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       phase,
       phaseMeta,
       isConnected,
+      connectionStatus,
+      connectionRole,
       saveNickname,
       becomeHost,
       handleScannedValue,

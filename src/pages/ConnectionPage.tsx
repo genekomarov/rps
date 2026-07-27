@@ -1,4 +1,3 @@
-import { useState } from "react";
 import ConnectionLog from "../components/ConnectionLog";
 import QrPanel from "../components/QrPanel";
 import QrScanner from "../components/QrScanner";
@@ -17,6 +16,9 @@ export default function ConnectionPage() {
     logEntries,
     diagnostics,
     isConnected,
+    connectionStatus,
+    connectionRole,
+    setConnectionRole,
     saveNickname,
     becomeHost,
     handleScannedValue,
@@ -25,47 +27,43 @@ export default function ConnectionPage() {
     appendLog,
   } = useSession();
 
-  const [connectionIntent, setConnectionIntent] = useState<"host" | "guest" | null>(null);
-
   const showQrOutput = Boolean(hostOfferCode || answerCode) && !isConnected;
   const isHostWaiting = Boolean(hostOfferCode) && !answerCode;
-  const mode = answerCode ? "guest" : hostOfferCode ? "host" : connectionIntent;
-  const canChooseRole = Boolean(nicknameDraft.trim()) && !isConnected && !busy;
-  const canCreateInvite = canChooseRole && !answerCode;
-  const canAcceptInvite = canChooseRole && !hostOfferCode && !answerCode;
-
-  function handleResetSession() {
-    setConnectionIntent(null);
-    resetSession();
-  }
+  const mode = answerCode ? "guest" : hostOfferCode ? "host" : connectionRole;
+  const showNicknameField = connectionStatus === "offline";
+  const canChooseRole = Boolean(nicknameDraft.trim()) && connectionStatus === "offline" && !busy;
+  const canCreateInvite = canChooseRole;
+  const canAcceptInvite = canChooseRole;
 
   function handleCreateInvite() {
     saveNickname();
     if (!nicknameDraft.trim()) return;
-    setConnectionIntent("host");
+    setConnectionRole("host");
     void becomeHost();
   }
 
   function handleAcceptInvite() {
     saveNickname();
     if (!nicknameDraft.trim()) return;
-    setConnectionIntent("guest");
+    setConnectionRole("guest");
   }
 
   return (
     <>
       <section className="card">
         <h1>Подключение</h1>
-        <label className="field">
-          <span>Ник</span>
-          <input
-            value={nicknameDraft}
-            onChange={(event) => setNicknameDraft(event.target.value)}
-            placeholder="Введите ник"
-            disabled={isConnected || busy || Boolean(mode)}
-          />
-        </label>
-        {!mode && !isConnected ? (
+        {showNicknameField ? (
+          <label className="field">
+            <span>Ник</span>
+            <input
+              value={nicknameDraft}
+              onChange={(event) => setNicknameDraft(event.target.value)}
+              placeholder="Введите ник"
+              disabled={busy}
+            />
+          </label>
+        ) : null}
+        {connectionStatus === "offline" ? (
           <div className="actions actions-equal">
             <button type="button" onClick={handleCreateInvite} disabled={!canCreateInvite}>
               Создать приглашение
@@ -76,7 +74,7 @@ export default function ConnectionPage() {
           </div>
         ) : (
           <div className="actions">
-            <button type="button" onClick={handleResetSession} disabled={busy}>
+            <button type="button" onClick={resetSession} disabled={busy}>
               Сбросить сессию
             </button>
           </div>

@@ -2,16 +2,30 @@ import type { ReactNode } from "react";
 import { buildHash } from "../lib/hashRouter";
 import { useFeedbackPrefs } from "../hooks/useFeedbackPrefs";
 import { useTheme } from "../hooks/useTheme";
+import type { ConnectionStatus } from "../types";
 
 interface AppLayoutProps {
   children: ReactNode;
-  connected: boolean;
+  connectionStatus: ConnectionStatus;
   nickname: string;
 }
 
-export default function AppLayout({ children, connected, nickname }: AppLayoutProps) {
+export default function AppLayout({ children, connectionStatus, nickname }: AppLayoutProps) {
   const { prefs, setSoundEnabled, setVibrationEnabled } = useFeedbackPrefs();
   const { isDark, toggleTheme } = useTheme();
+
+  const statusBadge =
+    connectionStatus === "online" ? (
+      <p className="connection-badge" title={nickname}>
+        Онлайн · {nickname}
+      </p>
+    ) : connectionStatus === "connecting" ? (
+      <p className="connection-badge connection-badge-connecting" title={nickname}>
+        Подключение · {nickname}
+      </p>
+    ) : (
+      <p className="connection-badge connection-badge-offline">Не подключен</p>
+    );
 
   return (
     <div className="app-shell">
@@ -55,13 +69,7 @@ export default function AppLayout({ children, connected, nickname }: AppLayoutPr
             Вибрация {prefs.vibrationEnabled ? "вкл" : "выкл"}
           </button>
         </div>
-        {connected ? (
-          <p className="connection-badge" title={nickname}>
-            Онлайн · {nickname}
-          </p>
-        ) : (
-          <p className="connection-badge connection-badge-offline">Не подключено</p>
-        )}
+        {statusBadge}
       </header>
       <main className="layout">{children}</main>
     </div>

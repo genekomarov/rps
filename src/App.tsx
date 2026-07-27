@@ -10,7 +10,7 @@ import WelcomePage from "./pages/WelcomePage";
 
 function AppRouter() {
   const { route, navigate } = useHashRoute();
-  const { isConnected, nickname } = useSession();
+  const { isConnected, nickname, connectionStatus } = useSession();
 
   useEffect(() => {
     if (route.name === "game" && !isConnected) {
@@ -24,7 +24,7 @@ function AppRouter() {
     const game = findGame(route.gameId);
     if (!game) {
       return (
-        <AppLayout connected={isConnected} nickname={nickname}>
+        <AppLayout connectionStatus={connectionStatus} nickname={nickname}>
           <section className="card">
             <h1>Игра не найдена</h1>
             <p className="muted">Игра «{route.gameId}» отсутствует в каталоге.</p>
@@ -36,7 +36,7 @@ function AppRouter() {
     const GameComponent = GAME_COMPONENTS[route.gameId];
     if (GameComponent) {
       return (
-        <AppLayout connected={isConnected} nickname={nickname}>
+        <AppLayout connectionStatus={connectionStatus} nickname={nickname}>
           <GameComponent />
         </AppLayout>
       );
@@ -45,14 +45,14 @@ function AppRouter() {
 
   if (route.name === "connection") {
     return (
-      <AppLayout connected={isConnected} nickname={nickname}>
+      <AppLayout connectionStatus={connectionStatus} nickname={nickname}>
         <ConnectionPage />
       </AppLayout>
     );
   }
 
   return (
-    <AppLayout connected={isConnected} nickname={nickname}>
+    <AppLayout connectionStatus={connectionStatus} nickname={nickname}>
       <WelcomePage connected={isConnected} />
     </AppLayout>
   );
