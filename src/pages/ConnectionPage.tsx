@@ -1,3 +1,4 @@
+import { useState } from "react";
 import ConnectionLog from "../components/ConnectionLog";
 import HandshakeSteps from "../components/HandshakeSteps";
 import QrPanel from "../components/QrPanel";
@@ -28,19 +29,33 @@ export default function ConnectionPage() {
     appendLog,
   } = useSession();
 
-  const showHostActions = !isConnected && !answerCode;
+  const [connectionIntent, setConnectionIntent] = useState<"host" | "guest" | null>(null);
+
   const showQrOutput = Boolean(hostOfferCode || answerCode) && !isConnected;
   const isHostWaiting = Boolean(hostOfferCode) && !answerCode;
+  const mode = answerCode ? "guest" : hostOfferCode ? "host" : connectionIntent;
+  const canChooseRole = Boolean(nickname) && !isConnected && !busy;
+  const canCreateInvite = canChooseRole && !answerCode;
+  const canAcceptInvite = canChooseRole && !hostOfferCode && !answerCode;
+
+  function handleResetSession() {
+    setConnectionIntent(null);
+    resetSession();
+  }
+
+  function handleCreateInvite() {
+    setConnectionIntent("host");
+    void becomeHost();
+  }
+
+  function handleAcceptInvite() {
+    setConnectionIntent("guest");
+  }
 
   return (
     <>
       <section className="card">
         <h1>Подключение</h1>
-        <p className="muted">
-          Управление P2P-соединением. Здесь можно создать приглашение, принять код партнёра или
-          разорвать сессию. Работает только в локальной сети.
-        </p>
-        <p className="muted">ID: {clientId}</p>
         <label className="field">
           <span>Ник</span>
           <input
@@ -54,15 +69,23 @@ export default function ConnectionPage() {
           <button type="button" onClick={saveNickname} disabled={!nicknameDraft.trim() || isConnected || busy}>
             Сохранить ник
           </button>
-          {showHostActions ? (
-            <button type="button" onClick={becomeHost} disabled={!nickname || busy}>
-              Создать приглашение (я хост)
-            </button>
-          ) : null}
-          <button type="button" onClick={resetSession} disabled={busy}>
-            Сбросить сессию
-          </button>
         </div>
+        {!mode && !isConnected ? (
+          <div className="actions actions-equal">
+            <button type="button" onClick={handleCreateInvite} disabled={!canCreateInvite}>
+              Создать приглашение
+            </button>
+            <button type="button" onClick={handleAcceptInvite} disabled={!canAcceptInvite}>
+              Принять приглашение
+            </button>
+          </div>
+        ) : (
+          <div className="actions">
+            <button type="button" onClick={handleResetSession} disabled={busy}>
+              Сбросить сессию
+            </button>
+          </div>
+        )}
         {error ? <p className="error">{error}</p> : null}
       </section>
 
@@ -73,7 +96,7 @@ export default function ConnectionPage() {
         busyLabel={busyLabel}
       />
 
-      {!isConnected ? (
+      {!isConnected && mode ? (
         <div className="grid">
           {showQrOutput ? (
             <QrPanel
@@ -86,16 +109,30 @@ export default function ConnectionPage() {
               fallbackLabel={answerCode ? "Ответ" : "Приглашение"}
             />
           ) : null}
-          <QrScanner
-            key={clientId}
-            onScan={handleScannedValue}
-            onLog={appendLog}
-            disabled={busy}
-            inputLabel={isHostWaiting ? "Вставить ответ" : "Вставить приглашение"}
-            partnerFieldLabel={isHostWaiting ? "Ответ" : "Приглашение"}
-          />
+          {mode === "host" && isHostWaiting ? (
+            <QrScanner
+              key={`${clientId}-answer`}
+              onScan={handleScannedValue}
+              onLog={appendLog}
+              disabled={busy}
+              inputLabel="Вставить ответ"
+              partnerFieldLabel="Ответ"
+            />
+          ) : null}
+          {mode === "guest" && !answerCode ? (
+            <QrScanner
+              key={`${clientId}-invite`}
+              onScan={handleScannedValue}
+              onLog={appendLog}
+              disabled={busy}
+              inputLabel="Вставить приглашение"
+              partnerFieldLabel="Приглашение"
+            />
+          ) : null}
         </div>
-      ) : (
+      ) : null}
+
+      {isConnected ? (
         <section className="card">
           <h2>Соединение активно</h2>
           <p className="muted">
@@ -106,7 +143,7 @@ export default function ConnectionPage() {
             Держите вкладку на экране: при сворачивании телефона WebRTC часто обрывается.
           </p>
         </section>
-      )}
+      ) : null}
 
       <ConnectionLog entries={logEntries} diagnostics={diagnostics} onClear={clearLog} />
     </>

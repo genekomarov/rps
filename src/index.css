@@ -158,6 +158,18 @@ p {
   flex-wrap: wrap;
 }
 
+.actions-equal {
+  flex-wrap: nowrap;
+}
+
+.actions-equal > button {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 button {
   border: 0;
   border-radius: 8px;
