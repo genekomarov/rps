@@ -78,7 +78,6 @@ export default function QrPanel({ value, title, fallbackLabel }: QrPanelProps) {
       ) : (
         <p>Нет данных для QR</p>
       )}
-      {value ? <p className="muted">Увеличьте QR на весь экран, если камера не читает с монитора.</p> : null}
       {error ? <p className="error">{error}</p> : null}
       <label className="field">
         <span>
