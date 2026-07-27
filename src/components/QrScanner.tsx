@@ -210,7 +210,18 @@ export default function QrScanner({
 
   return (
     <section className="card">
-      <h3>Принять код</h3>
+      <h3>{inputLabel}</h3>
+      <div className="actions">
+        <button
+          type="button"
+          onClick={() => setCameraEnabled((prev) => !prev)}
+          disabled={disabled}
+        >
+          {cameraEnabled ? "Остановить камеру" : "Сканировать камерой"}
+        </button>
+      </div>
+      {cameraEnabled ? <div id={regionId} className="scanner" /> : null}
+      {error ? <p className="error">{error}</p> : null}
       <label className="field">
         <span>{inputLabel}</span>
         <input
@@ -228,16 +239,7 @@ export default function QrScanner({
         <button type="button" onClick={applyManual} disabled={!manualValue.trim() || disabled}>
           Применить
         </button>
-        <button
-          type="button"
-          onClick={() => setCameraEnabled((prev) => !prev)}
-          disabled={disabled}
-        >
-          {cameraEnabled ? "Остановить камеру" : "Сканировать камерой"}
-        </button>
       </div>
-      <div id={regionId} className="scanner" />
-      {error ? <p className="error">{error}</p> : null}
     </section>
   );
 }
