@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ChangeEvent, type ClipboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type ClipboardEvent } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import type { LogLevel } from "../types";
 
@@ -110,11 +110,9 @@ export default function QrScanner({
   const [manualValue, setManualValue] = useState("");
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [error, setError] = useState("");
-  const [fileBusy, setFileBusy] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const onScanRef = useRef(onScan);
   const onLogRef = useRef(onLog);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const regionId = useId().replace(/:/g, "");
 
   useEffect(() => {
@@ -183,31 +181,6 @@ export default function QrScanner({
     };
   }, [cameraEnabled, disabled, regionId]);
 
-  async function handleImageFile(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file || cameraEnabled || disabled) return;
-
-    setFileBusy(true);
-    setError("");
-    onLogRef.current?.("info", "Сканирование QR из файла...");
-
-    const scanner = new Html5Qrcode(regionId, SCANNER_CREATE_CONFIG);
-
-    try {
-      const decodedText = await scanner.scanFile(file, true);
-      setManualValue(decodedText);
-      onLogRef.current?.("info", "QR распознан из файла");
-      void onScanRef.current(decodedText);
-    } catch {
-      setError("QR на изображении не найден");
-      onLogRef.current?.("warn", "QR на изображении не найден");
-    } finally {
-      await stopScanner(scanner);
-      setFileBusy(false);
-    }
-  }
-
   function applyManual() {
     if (!manualValue.trim() || disabled) return;
     onLogRef.current?.("info", "Применение payload из поля ввода");
@@ -215,7 +188,7 @@ export default function QrScanner({
   }
 
   async function pasteFromClipboard() {
-    if (disabled || fileBusy) return;
+    if (disabled) return;
 
     try {
       const text = normalizePasteText(await navigator.clipboard.readText());
@@ -229,7 +202,7 @@ export default function QrScanner({
 
   function handlePaste(event: ClipboardEvent<HTMLInputElement>) {
     event.preventDefault();
-    if (disabled || fileBusy) return;
+    if (disabled) return;
 
     const text = normalizePasteText(event.clipboardData.getData("text"));
     if (!text) return;
@@ -251,37 +224,23 @@ export default function QrScanner({
           readOnly
           value={manualValue}
           placeholder="Клик или Ctrl/Cmd+V"
-          disabled={disabled || fileBusy}
+          disabled={disabled}
           onClick={() => void pasteFromClipboard()}
           onPaste={handlePaste}
           title="Клик — вставить из буфера, Ctrl/Cmd+V — тоже"
         />
       </label>
       <div className="actions">
-        <button type="button" onClick={applyManual} disabled={!manualValue.trim() || disabled || fileBusy}>
+        <button type="button" onClick={applyManual} disabled={!manualValue.trim() || disabled}>
           Применить
         </button>
         <button
           type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={cameraEnabled || fileBusy || disabled}
-        >
-          {fileBusy ? "Читаю файл..." : "Загрузить фото QR"}
-        </button>
-        <button
-          type="button"
           onClick={() => setCameraEnabled((prev) => !prev)}
-          disabled={fileBusy || disabled}
+          disabled={disabled}
         >
           {cameraEnabled ? "Остановить камеру" : "Сканировать камерой"}
         </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          hidden
-          onChange={handleImageFile}
-        />
       </div>
       <div id={regionId} className="scanner" />
       {error ? <p className="error">{error}</p> : null}
