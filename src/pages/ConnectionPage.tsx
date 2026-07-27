@@ -8,7 +8,6 @@ import { useSession } from "../context/SessionContext";
 export default function ConnectionPage() {
   const {
     clientId,
-    nickname,
     nicknameDraft,
     setNicknameDraft,
     hostOfferCode,
@@ -34,7 +33,7 @@ export default function ConnectionPage() {
   const showQrOutput = Boolean(hostOfferCode || answerCode) && !isConnected;
   const isHostWaiting = Boolean(hostOfferCode) && !answerCode;
   const mode = answerCode ? "guest" : hostOfferCode ? "host" : connectionIntent;
-  const canChooseRole = Boolean(nickname) && !isConnected && !busy;
+  const canChooseRole = Boolean(nicknameDraft.trim()) && !isConnected && !busy;
   const canCreateInvite = canChooseRole && !answerCode;
   const canAcceptInvite = canChooseRole && !hostOfferCode && !answerCode;
 
@@ -44,11 +43,15 @@ export default function ConnectionPage() {
   }
 
   function handleCreateInvite() {
+    saveNickname();
+    if (!nicknameDraft.trim()) return;
     setConnectionIntent("host");
     void becomeHost();
   }
 
   function handleAcceptInvite() {
+    saveNickname();
+    if (!nicknameDraft.trim()) return;
     setConnectionIntent("guest");
   }
 
@@ -62,14 +65,9 @@ export default function ConnectionPage() {
             value={nicknameDraft}
             onChange={(event) => setNicknameDraft(event.target.value)}
             placeholder="Введите ник"
-            disabled={isConnected || busy}
+            disabled={isConnected || busy || Boolean(mode)}
           />
         </label>
-        <div className="actions">
-          <button type="button" onClick={saveNickname} disabled={!nicknameDraft.trim() || isConnected || busy}>
-            Сохранить ник
-          </button>
-        </div>
         {!mode && !isConnected ? (
           <div className="actions actions-equal">
             <button type="button" onClick={handleCreateInvite} disabled={!canCreateInvite}>

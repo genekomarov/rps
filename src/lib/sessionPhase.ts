@@ -29,7 +29,7 @@ export function getPhaseMeta(phase: SessionPhase | string): PhaseMeta {
     case PHASE.SETUP:
       return {
         title: "Шаг 1. Введите ник",
-        hint: "Сохраните ник, чтобы начать подключение.",
+        hint: "Введите ник и выберите роль, чтобы начать подключение.",
       };
     case PHASE.READY:
       return {
