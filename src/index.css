@@ -381,9 +381,16 @@ button:disabled {
   border-radius: 999px;
   background: var(--toggle-bg);
   color: var(--toggle-text);
-  font-size: 0.82rem;
-  font-weight: 600;
-  padding: 0.25rem 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+}
+
+.feedback-toggle-icon {
+  display: block;
 }
 
 .feedback-toggle-on {
