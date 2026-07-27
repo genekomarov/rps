@@ -144,6 +144,14 @@ p {
   user-select: none;
 }
 
+.field input.paste-field {
+  cursor: pointer;
+  resize: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .actions {
   display: flex;
   gap: 0.5rem;

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useId, useRef, useState, type ChangeEvent, type ClipboardEvent } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import type { LogLevel } from "../types";
 
@@ -14,6 +14,10 @@ const SCANNER_CREATE_CONFIG = {
     useBarCodeDetectorIfSupported: true,
   },
 };
+
+function normalizePasteText(text: string): string {
+  return text.replace(/[\r\n]+/g, "").trim();
+}
 
 function isLikelyMobile(): boolean {
   return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
@@ -210,20 +214,47 @@ export default function QrScanner({
     void onScan(manualValue);
   }
 
+  async function pasteFromClipboard() {
+    if (disabled || fileBusy) return;
+
+    try {
+      const text = normalizePasteText(await navigator.clipboard.readText());
+      if (!text) return;
+      setManualValue(text);
+      onLogRef.current?.("info", "Вставлено из буфера обмена");
+    } catch {
+      onLogRef.current?.("warn", "Не удалось прочитать буфер — используйте Ctrl/Cmd+V");
+    }
+  }
+
+  function handlePaste(event: ClipboardEvent<HTMLInputElement>) {
+    event.preventDefault();
+    if (disabled || fileBusy) return;
+
+    const text = normalizePasteText(event.clipboardData.getData("text"));
+    if (!text) return;
+    setManualValue(text);
+    onLogRef.current?.("info", "Вставлено через Ctrl/Cmd+V");
+  }
+
   return (
     <section className="card">
       <h3>Принять код</h3>
       <p className="muted scanner-hint">
-        Быстрее всего — вставить текст из «{partnerFieldLabel}». Камера подходит для коротких QR.
+        Кликните по полю, чтобы вставить из буфера, или нажмите Ctrl/Cmd+V. Текст берётся из «
+        {partnerFieldLabel}». Камера подходит для коротких QR.
       </p>
       <label className="field">
         <span>{inputLabel}</span>
-        <textarea
+        <input
+          className="paste-field"
+          readOnly
           value={manualValue}
-          onChange={(event) => setManualValue(event.target.value)}
-          rows={4}
-          placeholder="rps://..."
+          placeholder="Клик или Ctrl/Cmd+V"
           disabled={disabled || fileBusy}
+          onClick={() => void pasteFromClipboard()}
+          onPaste={handlePaste}
+          title="Клик — вставить из буфера, Ctrl/Cmd+V — тоже"
         />
       </label>
       <div className="actions">
