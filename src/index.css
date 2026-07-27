@@ -189,48 +189,6 @@ button:disabled {
   color: var(--secondary-text);
 }
 
-.handshake-steps {
-  gap: 0.65rem;
-}
-
-.step-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-}
-
-.step-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  border-radius: 999px;
-  padding: 0.25rem 0.65rem;
-  font-size: 0.88rem;
-  border: 1px solid var(--border-strong);
-  color: var(--text-muted);
-  background: var(--bg-subtle);
-}
-
-.step-item.step-current {
-  border-color: #2563eb;
-  color: #1d4ed8;
-  background: #eff6ff;
-  font-weight: 600;
-}
-
-.step-item.step-done {
-  border-color: #86efac;
-  color: #166534;
-  background: #f0fdf4;
-}
-
-.step-marker {
-  font-weight: 700;
-}
-
 .busy-label {
   color: #1d4ed8;
   font-weight: 600;

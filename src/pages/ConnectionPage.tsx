@@ -1,6 +1,5 @@
 import { useState } from "react";
 import ConnectionLog from "../components/ConnectionLog";
-import HandshakeSteps from "../components/HandshakeSteps";
 import QrPanel from "../components/QrPanel";
 import QrScanner from "../components/QrScanner";
 import { useSession } from "../context/SessionContext";
@@ -17,8 +16,6 @@ export default function ConnectionPage() {
     busyLabel,
     logEntries,
     diagnostics,
-    phase,
-    phaseMeta,
     isConnected,
     saveNickname,
     becomeHost,
@@ -85,14 +82,8 @@ export default function ConnectionPage() {
           </div>
         )}
         {error ? <p className="error">{error}</p> : null}
+        {busyLabel ? <p className="busy-label">{busyLabel}</p> : null}
       </section>
-
-      <HandshakeSteps
-        phase={phase}
-        title={phaseMeta.title}
-        hint={phaseMeta.hint}
-        busyLabel={busyLabel}
-      />
 
       {!isConnected && mode ? (
         <div className="grid">
