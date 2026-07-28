@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { playOpponentSound, vibrateOpponentAlert } from "../lib/feedback";
+import { isVibrationSupported, playOpponentSound, vibrateOpponentAlert } from "../lib/feedback";
 import {
   loadFeedbackPrefs,
   saveFeedbackPrefs,
@@ -21,12 +21,14 @@ export function useFeedbackPrefs() {
     const next = saveFeedbackPrefs({ vibrationEnabled });
     setPrefs(next);
     if (vibrationEnabled) {
+      // Must run in the same user-gesture turn as the toggle (Chrome sticky activation).
       vibrateOpponentAlert();
     }
   }, []);
 
   return {
     prefs,
+    vibrationSupported: isVibrationSupported(),
     setSoundEnabled,
     setVibrationEnabled,
   };

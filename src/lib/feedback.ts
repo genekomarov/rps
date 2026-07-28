@@ -1,6 +1,11 @@
 import { loadFeedbackPrefs } from "./feedbackPrefs";
 
 let audioContext: AudioContext | null = null;
+let pendingVibrate = false;
+let pendingVibrateArmed = false;
+
+/** Noticeable pulse: vibrate / pause / vibrate (ms). Short 40ms bursts are easy to miss. */
+const OPPONENT_VIBRATE_PATTERN = [120, 60, 120];
 
 function getAudioContext(): AudioContext | null {
   if (typeof window === "undefined") return null;
@@ -36,13 +41,55 @@ export function playOpponentSound(): void {
   });
 }
 
-export function vibrateOpponentAlert(): void {
-  if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
-  try {
-    navigator.vibrate([40, 30, 40]);
-  } catch {
-    // Some browsers expose vibrate but reject the call.
+export function isVibrationSupported(): boolean {
+  if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") {
+    return false;
   }
+  // Chrome/Edge on desktop expose vibrate() but there is no motor.
+  if (navigator.maxTouchPoints === 0) {
+    const coarse =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(pointer: coarse)").matches;
+    if (!coarse) return false;
+  }
+  return true;
+}
+
+function flushPendingVibrate(): void {
+  if (!pendingVibrate) return;
+  pendingVibrate = false;
+  if (!loadFeedbackPrefs().vibrationEnabled) return;
+  tryVibrate();
+}
+
+function armPendingVibrateFlush(): void {
+  if (pendingVibrateArmed || typeof document === "undefined") return;
+  pendingVibrateArmed = true;
+  // Chrome requires sticky user activation; retry on the next real gesture if a
+  // network-driven call was blocked.
+  document.addEventListener("pointerdown", flushPendingVibrate, true);
+}
+
+function tryVibrate(): boolean {
+  if (!isVibrationSupported()) return false;
+  try {
+    // Cancel any in-progress pattern first, then start ours.
+    navigator.vibrate(0);
+    return Boolean(navigator.vibrate(OPPONENT_VIBRATE_PATTERN));
+  } catch {
+    return false;
+  }
+}
+
+/** @returns whether the browser accepted the vibration request */
+export function vibrateOpponentAlert(): boolean {
+  const ok = tryVibrate();
+  if (!ok && isVibrationSupported()) {
+    pendingVibrate = true;
+    armPendingVibrateFlush();
+  }
+  return ok;
 }
 
 export function notifyOpponentAction(): void {

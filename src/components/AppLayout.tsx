@@ -74,8 +74,14 @@ function VibrationIcon() {
 }
 
 export default function AppLayout({ children, connectionStatus, nickname }: AppLayoutProps) {
-  const { prefs, setSoundEnabled, setVibrationEnabled } = useFeedbackPrefs();
+  const { prefs, vibrationSupported, setSoundEnabled, setVibrationEnabled } = useFeedbackPrefs();
   const { isDark, toggleTheme } = useTheme();
+
+  const vibrationLabel = !vibrationSupported
+    ? "Вибрация недоступна в этом браузере"
+    : prefs.vibrationEnabled
+      ? "Выключить вибрацию"
+      : "Включить вибрацию";
 
   const statusBadge =
     connectionStatus === "online" ? (
@@ -132,8 +138,9 @@ export default function AppLayout({ children, connectionStatus, nickname }: AppL
               type="button"
               className={`feedback-toggle${prefs.vibrationEnabled ? " feedback-toggle-on" : ""}`}
               aria-pressed={prefs.vibrationEnabled}
-              aria-label={prefs.vibrationEnabled ? "Выключить вибрацию" : "Включить вибрацию"}
-              title={prefs.vibrationEnabled ? "Выключить вибрацию" : "Включить вибрацию"}
+              aria-label={vibrationLabel}
+              title={vibrationLabel}
+              disabled={!vibrationSupported}
               onClick={() => setVibrationEnabled(!prefs.vibrationEnabled)}
             >
               <VibrationIcon />
