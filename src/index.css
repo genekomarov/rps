@@ -181,11 +181,18 @@ p {
 }
 
 button {
+  appearance: none;
+  -webkit-appearance: none;
   border: 0;
   border-radius: 8px;
   background: var(--primary);
   color: var(--primary-text);
   padding: 0.5rem 0.8rem;
+  font: inherit;
+  line-height: 1.25;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
 }
 
