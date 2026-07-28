@@ -159,7 +159,7 @@ export default function RpsArenaGame() {
               <div className="arena-board-stage">
                 <div
                   className="arena-board"
-                  style={{ gridTemplateColumns: `repeat(${BOARD_COLS}, minmax(42px, 1fr))` }}
+                  style={{ gridTemplateColumns: `repeat(${BOARD_COLS}, minmax(0, 1fr))` }}
                 >
                   {Array.from({ length: BOARD_ROWS }, (_, displayRow) =>
                     Array.from({ length: BOARD_COLS }, (_, displayCol) => {

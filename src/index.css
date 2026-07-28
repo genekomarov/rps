@@ -649,6 +649,7 @@ button:disabled {
 
 .ttt-cell {
   aspect-ratio: 1;
+  width: 100%;
   font-size: 2rem;
   font-weight: 700;
   background: var(--cell-bg);
@@ -656,6 +657,9 @@ button:disabled {
   border: 2px solid var(--border-strong);
   border-radius: 12px;
   padding: 0;
+  line-height: 1;
+  display: grid;
+  place-items: center;
 }
 
 .ttt-cell:disabled:not(.ttt-cell-x):not(.ttt-cell-o) {
@@ -686,19 +690,19 @@ button:disabled {
 }
 
 .arena-board-stack {
-  width: fit-content;
+  width: min(100%, 28rem);
   margin: 0 auto;
 }
 
 .arena-board-stage {
   position: relative;
-  width: fit-content;
+  width: 100%;
 }
 
 .arena-board {
   display: grid;
   gap: 0.25rem;
-  width: fit-content;
+  width: 100%;
 }
 
 .arena-duel-overlay {
@@ -731,11 +735,14 @@ button:disabled {
 
 .arena-duel-choice {
   aspect-ratio: 1;
-  min-width: 4.25rem;
-  min-height: 4.25rem;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: auto;
   display: grid;
   place-items: center;
   padding: 0.55rem;
+  line-height: 0;
   border-radius: 12px;
   background: var(--secondary);
   color: var(--secondary-text);
@@ -749,15 +756,19 @@ button:disabled {
 
 .arena-cell {
   aspect-ratio: 1;
-  min-width: 42px;
-  min-height: 42px;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: auto;
   background: var(--cell-bg);
   color: var(--text);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0;
+  line-height: 0;
   display: grid;
   place-items: center;
+  align-content: center;
 }
 
 .arena-cell-home {
@@ -790,8 +801,10 @@ button:disabled {
   display: grid;
   place-items: center;
   line-height: 0;
-  width: calc(100% - 4px);
-  height: calc(100% - 4px);
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 2px;
   border-radius: 4px;
 }
 
