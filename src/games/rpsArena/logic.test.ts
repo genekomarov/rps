@@ -108,6 +108,7 @@ describe("initiative", () => {
     expect(state.phase).toBe("setup");
     expect(state.currentTurn).toBe("alice");
     expect(state.initiative).toBeNull();
+    expect(state.colorByPlayerId).toEqual({ alice: "b", bob: "a" });
   });
 
   it("gives first turn to player B when they win initiative", () => {
@@ -117,6 +118,7 @@ describe("initiative", () => {
 
     expect(state.phase).toBe("setup");
     expect(state.currentTurn).toBe("bob");
+    expect(state.colorByPlayerId).toEqual({ alice: "a", bob: "b" });
   });
 
   it("resets choices on initiative tie", () => {
@@ -359,6 +361,7 @@ describe("startNextRound", () => {
     expect(next.currentTurn).toBe("bob");
     expect(next.initiative).toBeNull();
     expect(next.score.wins).toEqual({ alice: 1, bob: 2 });
+    expect(next.colorByPlayerId).toEqual({ alice: "a", bob: "b" });
     expect(next.pieces).toHaveLength(28);
   });
 
@@ -406,17 +409,11 @@ describe("assignPlayers", () => {
 });
 
 describe("player colors", () => {
-  it("assigns opposite colors to both players", () => {
-    const state = createInitialState("alice", "bob", () => 0.1);
-    expect(state.colorByPlayerId.alice).toBeTruthy();
-    expect(state.colorByPlayerId.bob).toBeTruthy();
-    expect(state.colorByPlayerId.alice).not.toBe(state.colorByPlayerId.bob);
-  });
+  it("gives red (b) to the first player", () => {
+    const aliceFirst = createInitialState("alice", "bob", () => 0.1, { firstPlayerId: "alice" });
+    expect(aliceFirst.colorByPlayerId).toEqual({ alice: "b", bob: "a" });
 
-  it("randomly flips color assignment", () => {
-    const light = createInitialState("alice", "bob", () => 0.1);
-    const heavy = createInitialState("alice", "bob", () => 0.9);
-    expect(light.colorByPlayerId).toEqual({ alice: "a", bob: "b" });
-    expect(heavy.colorByPlayerId).toEqual({ alice: "b", bob: "a" });
+    const bobFirst = createInitialState("alice", "bob", () => 0.1, { firstPlayerId: "bob" });
+    expect(bobFirst.colorByPlayerId).toEqual({ alice: "a", bob: "b" });
   });
 });

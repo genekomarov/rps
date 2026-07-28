@@ -126,12 +126,11 @@ function createEmptyDuelChoices(playerAId: string, playerBId: string): DuelChoic
 export function assignPlayerColors(
   playerAId: string,
   playerBId: string,
-  random = Math.random,
+  firstPlayerId: string = playerAId,
 ): Record<string, PieceColor> {
-  if (random() < 0.5) {
-    return { [playerAId]: "a", [playerBId]: "b" };
-  }
-  return { [playerAId]: "b", [playerBId]: "a" };
+  const secondPlayerId = firstPlayerId === playerAId ? playerBId : playerAId;
+  // "b" is red in the UI — reserved for the player who moves first.
+  return { [firstPlayerId]: "b", [secondPlayerId]: "a" };
 }
 
 export function getPieceColor(state: RpsArenaState, playerId: string): PieceColor {
@@ -206,7 +205,7 @@ export function createInitialState(
     initiative: skipInitiative ? null : createEmptyDuelChoices(playerAId, playerBId),
     tiebreak: null,
     lastMove: null,
-    colorByPlayerId: assignPlayerColors(playerAId, playerBId, random),
+    colorByPlayerId: assignPlayerColors(playerAId, playerBId, firstPlayerId ?? playerAId),
     options,
   };
 
@@ -540,6 +539,7 @@ export function submitInitiativeChoice(
     phase: "setup",
     currentTurn: firstPlayerId,
     initiative: null,
+    colorByPlayerId: assignPlayerColors(state.playerAId, state.playerBId, firstPlayerId),
   };
 }
 
