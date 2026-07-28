@@ -17,10 +17,7 @@ export default function ChatGame() {
     <>
       <section className="card game-header">
         <div className="game-header-row">
-          <div>
-            <h1>Чат</h1>
-            <p className="muted">P2P-обмен сообщениями между участниками.</p>
-          </div>
+          <h1>Чат</h1>
           <a className="button-secondary game-back-link" href={buildHash({ name: "welcome" })}>
             К каталогу
           </a>

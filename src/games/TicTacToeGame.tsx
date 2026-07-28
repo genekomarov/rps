@@ -34,10 +34,7 @@ export default function TicTacToeGame() {
     <>
       <section className="card game-header">
         <div className="game-header-row">
-          <div>
-            <h1>Крестики-нолики</h1>
-            <p className="muted">Классическая игра 3×3 для двух игроков по P2P.</p>
-          </div>
+          <h1>Крестики-нолики</h1>
           <a className="button-secondary game-back-link" href={buildHash({ name: "welcome" })}>
             К каталогу
           </a>

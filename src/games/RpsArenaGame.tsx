@@ -138,10 +138,7 @@ export default function RpsArenaGame() {
     <>
       <section className="card game-header">
         <div className="game-header-row">
-          <div>
-            <h1>Камень-ножницы-бумага</h1>
-            <p className="muted">Тактическая игра ICQ: поле 7×6, знамя, ловушка и скрытое оружие.</p>
-          </div>
+          <h1>Камень-ножницы-бумага</h1>
           <a className="button-secondary game-back-link" href={buildHash({ name: "welcome" })}>
             К каталогу
           </a>
