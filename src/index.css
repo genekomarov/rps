@@ -78,23 +78,40 @@
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
+html {
+  overflow-x: hidden;
+  overflow-x: clip;
+}
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   background: var(--bg);
   color: var(--text);
+  overflow-x: hidden;
+  overflow-x: clip;
+  max-width: 100%;
 }
 
 * {
   box-sizing: border-box;
 }
 
+img,
+video,
+canvas {
+  max-width: 100%;
+}
+
 .layout {
   max-width: 980px;
+  width: 100%;
   margin: 0 auto;
   padding: 1rem;
   display: grid;
   gap: 1rem;
+  min-width: 0;
+  align-content: start;
 }
 
 .card {
@@ -104,6 +121,9 @@ body {
   box-shadow: var(--shadow);
   display: grid;
   gap: 0.75rem;
+  min-width: 0;
+  max-width: 100%;
+  align-content: start;
 }
 
 h1,
@@ -120,20 +140,25 @@ p {
 .error {
   color: var(--danger);
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .field {
   display: grid;
   gap: 0.4rem;
+  min-width: 0;
 }
 
 .field input,
 .field textarea {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid var(--border-strong);
   border-radius: 8px;
   padding: 0.55rem 0.65rem;
   font: inherit;
+  font-size: 1rem;
   resize: vertical;
   background: var(--bg-elevated);
   color: var(--text);
@@ -166,18 +191,25 @@ p {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .actions-equal {
   flex-wrap: nowrap;
+  width: 100%;
 }
 
 .actions-equal > button {
   flex: 1 1 0;
   min-width: 0;
+  max-width: 100%;
+  /* ellipsis does not work on flex containers */
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: center;
 }
 
 button {
@@ -209,6 +241,7 @@ button:disabled {
 .busy-label {
   color: #1d4ed8;
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .connection-log-header {
@@ -216,6 +249,12 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+  min-width: 0;
+}
+
+.connection-log-header h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .connection-diagnostics {
@@ -245,13 +284,20 @@ button:disabled {
   color: #e2e8f0;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.8rem;
+  min-width: 0;
 }
 
 .log-line {
   display: grid;
-  grid-template-columns: 4.8rem 1fr;
+  grid-template-columns: 4.8rem minmax(0, 1fr);
   gap: 0.5rem;
   padding: 0.15rem 0;
+}
+
+.log-line > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .log-line time {
@@ -285,7 +331,8 @@ button:disabled {
 .grid {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  min-width: 0;
 }
 
 .qr-panel {
@@ -294,6 +341,7 @@ button:disabled {
 
 .qr-image {
   width: min(100%, 512px);
+  max-width: 100%;
   height: auto;
   aspect-ratio: 1;
   border-radius: 8px;
@@ -302,10 +350,20 @@ button:disabled {
 }
 
 .scanner {
-  min-height: 320px;
+  width: 100%;
+  min-width: 0;
+  min-height: 220px;
   border: 1px dashed #d1d5db;
   border-radius: 8px;
   overflow: hidden;
+}
+
+.scanner video,
+.scanner canvas,
+.scanner img {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
 }
 
 .chat {
@@ -329,6 +387,8 @@ button:disabled {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   padding: 0.45rem 0.55rem;
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 .chat-item.own {
@@ -338,12 +398,17 @@ button:disabled {
 
 .app-shell {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .app-shell > .layout {
   flex: 1;
+  min-width: 0;
 }
 
 .app-footer {
@@ -368,6 +433,7 @@ button:disabled {
   justify-content: space-between;
   gap: 0.75rem;
   width: 100%;
+  min-width: 0;
 }
 
 .app-header-bottom {
@@ -441,7 +507,12 @@ button:disabled {
 .connection-badge {
   margin: 0;
   margin-left: auto;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: min(14rem, 55%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 0.88rem;
   font-weight: 600;
   color: var(--online-text);
@@ -560,17 +631,20 @@ button:disabled {
 
 .ttt-board-card {
   justify-items: center;
+  overflow-x: auto;
 }
 
 .ttt-board-stack {
   width: fit-content;
+  max-width: 100%;
 }
 
 .ttt-board {
   display: grid;
-  grid-template-columns: repeat(3, minmax(72px, 96px));
+  grid-template-columns: repeat(3, minmax(min(72px, 28vw), 96px));
   gap: 0.5rem;
   width: fit-content;
+  max-width: 100%;
 }
 
 .ttt-cell {
