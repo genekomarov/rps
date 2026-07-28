@@ -1,17 +1,11 @@
+import { GameScoreLine } from "../components/GameScoreLine";
 import { buildHash } from "../lib/hashRouter";
-import { getPlayerMark } from "./ticTacToe/logic";
 import { useTicTacToe } from "./ticTacToe/useTicTacToe";
-
-function formatPlayerLabel(name: string, mark: "X" | "O" | null, isSelf: boolean): string {
-  const suffix = mark ? ` (${mark})` : "";
-  return `${name}${isSelf ? " (вы)" : ""}${suffix}`;
-}
 
 export default function TicTacToeGame() {
   const {
     state,
     opponent,
-    nickname,
     clientId,
     myMark,
     canPlay,
@@ -52,45 +46,36 @@ export default function TicTacToeGame() {
 
       <section className="card">
         <p className="ttt-status">{statusText}</p>
-
-        {state && opponent ? (
-          <div className="ttt-scoreboard">
-            <div className="ttt-score-item">
-              <span>{formatPlayerLabel(nickname, getPlayerMark(state, clientId), true)}</span>
-              <strong>{state.score.wins[clientId] ?? 0}</strong>
-            </div>
-            <div className="ttt-score-item">
-              <span>Ничьи</span>
-              <strong>{state.score.draws}</strong>
-            </div>
-            <div className="ttt-score-item">
-              <span>{formatPlayerLabel(opponent.name || opponent.id, getPlayerMark(state, opponent.id), false)}</span>
-              <strong>{state.score.wins[opponent.id] ?? 0}</strong>
-            </div>
-          </div>
-        ) : (
-          <p className="muted">Счёт ведётся только в рамках текущей сессии подключения.</p>
-        )}
       </section>
 
       {state ? (
         <section className="card ttt-board-card">
-          <div className="ttt-board" role="grid" aria-label="Поле крестиков-ноликов">
-            {state.board.map((cell, index) => {
-              const isClickable = canPlay && cell === null;
-              return (
-                <button
-                  key={index}
-                  type="button"
-                  className={`ttt-cell${cell === "X" ? " ttt-cell-x" : ""}${cell === "O" ? " ttt-cell-o" : ""}`}
-                  disabled={!isClickable}
-                  onClick={() => makeMove(index)}
-                  aria-label={cell ? `Клетка ${index + 1}: ${cell}` : `Клетка ${index + 1}: пусто`}
-                >
-                  {cell}
-                </button>
-              );
-            })}
+          <div className="ttt-board-stack">
+            <div className="ttt-board" role="grid" aria-label="Поле крестиков-ноликов">
+              {state.board.map((cell, index) => {
+                const isClickable = canPlay && cell === null;
+                return (
+                  <button
+                    key={index}
+                    type="button"
+                    className={`ttt-cell${cell === "X" ? " ttt-cell-x" : ""}${cell === "O" ? " ttt-cell-o" : ""}`}
+                    disabled={!isClickable}
+                    onClick={() => makeMove(index)}
+                    aria-label={cell ? `Клетка ${index + 1}: ${cell}` : `Клетка ${index + 1}: пусто`}
+                  >
+                    {cell}
+                  </button>
+                );
+              })}
+            </div>
+
+            {opponent ? (
+              <GameScoreLine
+                you={state.score.wins[clientId] ?? 0}
+                opponent={state.score.wins[opponent.id] ?? 0}
+                draws={state.score.draws}
+              />
+            ) : null}
           </div>
 
           {state.status === "finished" ? (
