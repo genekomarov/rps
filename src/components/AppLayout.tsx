@@ -149,6 +149,9 @@ export default function AppLayout({ children, connectionStatus, nickname }: AppL
         </div>
       </header>
       <main className="layout">{children}</main>
+      <footer className="app-footer">
+        <p className="muted">v{__APP_VERSION__}</p>
+      </footer>
     </div>
   );
 }
