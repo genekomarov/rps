@@ -188,7 +188,7 @@ export default function RpsArenaGame() {
                         >
                           {piece ? (
                             <span
-                              className={`arena-piece arena-piece-player-${getPieceColor(state, piece.ownerId)}${isOwn ? " arena-piece-own" : ""}`}
+                              className={`arena-piece arena-piece-player-${getPieceColor(state, piece.ownerId)}${isOwn ? " arena-piece-own" : ""}${isOwn && piece.revealed ? " arena-piece-revealed" : ""}`}
                             >
                               <ArenaPieceIcon piece={piece} isOwn={Boolean(isOwn)} className="arena-icon" />
                             </span>

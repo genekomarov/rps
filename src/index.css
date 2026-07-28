@@ -33,6 +33,8 @@
   --cell-home: #f8fafc;
   --piece-a: #dbeafe;
   --piece-b: #fecaca;
+  --piece-a-revealed: #93c5fd;
+  --piece-b-revealed: #f87171;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
@@ -71,6 +73,8 @@
   --cell-home: #111827;
   --piece-a: #1e3a8a;
   --piece-b: #7f1d1d;
+  --piece-a-revealed: #172554;
+  --piece-b-revealed: #450a0a;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
@@ -704,6 +708,14 @@ button:disabled {
 
 .arena-piece-player-b {
   background: var(--piece-b);
+}
+
+.arena-piece-own.arena-piece-revealed.arena-piece-player-a {
+  background: var(--piece-a-revealed);
+}
+
+.arena-piece-own.arena-piece-revealed.arena-piece-player-b {
+  background: var(--piece-b-revealed);
 }
 
 .arena-icon {
