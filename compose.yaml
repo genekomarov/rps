@@ -1,0 +1,14 @@
+# Имена сервисов с префиксом slug: общая сеть lab, иначе столкнётся web другого приложения.
+services:
+  rps-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    mem_limit: 48m
+    networks:
+      - lab
+
+networks:
+  lab:
+    external: true

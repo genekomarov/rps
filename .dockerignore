@@ -1,0 +1,10 @@
+node_modules
+.vite
+.git
+docs
+*.local
+.DS_Store
+README.md
+AGENTS.md
+.env
+.env.*
